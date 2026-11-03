@@ -26,6 +26,9 @@ class ClientApp(ctk.CTk):
 
         self._build_ui()
 
+        # Atur agar saat tombol X (Close) diklik, jendela hanya sembunyi dan TETAP AKTIF di background
+        self.protocol("WM_DELETE_WINDOW", self._on_close_clicked)
+
         # Jalankan engine client
         self.engine.start()
 
@@ -178,6 +181,11 @@ class ClientApp(ctk.CTk):
             else:
                 self.switch_autostart.select()
                 messagebox.showerror("Gagal", "Gagal menonaktifkan auto-start di registry Windows.")
+
+    def _on_close_clicked(self):
+        """Ketika tombol X (Close) diklik, sembunyikan jendela agar tetap aktif memantau di background."""
+        self.withdraw()
+        self._append_log("Jendela ditutup tetapi aplikasi TETAP AKTIF di latar belakang.")
 
     def _minimize_to_bg(self):
         self.withdraw()  # Sembunyikan jendela dari taskbar
