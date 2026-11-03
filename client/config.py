@@ -1,12 +1,20 @@
-"""Penyimpanan konfigurasi lokal untuk PC Client."""
+"""Penyimpanan konfigurasi lokal untuk PC Client yang persisten."""
 import json
 import os
+import sys
 import uuid
 
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), "client_config.json")
+def get_config_file() -> str:
+    """Mendapatkan path penyimpanan file konfigurasi client."""
+    if getattr(sys, 'frozen', False):
+        base = os.path.dirname(sys.executable)
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, "client_config.json")
 
 def load_client_config() -> dict:
     """Memuat konfigurasi client."""
+    cfg_file = get_config_file()
     default_cfg = {
         "client_id": str(uuid.uuid4())[:12],
         "server_ip": "127.0.0.1",
@@ -18,19 +26,18 @@ def load_client_config() -> dict:
             "instagram",
             "tiktok",
             "twitter",
-            "x.com",
             "roblox",
-            "judi"
+            "judi",
+            "slot"
         ]
     }
-    if not os.path.exists(CONFIG_FILE):
+    if not os.path.exists(cfg_file):
         save_client_config(default_cfg)
         return default_cfg
 
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(cfg_file, "r", encoding="utf-8") as f:
             data = json.load(f)
-            # Pastikan field default ada
             for k, v in default_cfg.items():
                 if k not in data:
                     data[k] = v
@@ -41,9 +48,9 @@ def load_client_config() -> dict:
 def save_client_config(cfg: dict) -> bool:
     """Menyimpan konfigurasi client."""
     try:
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        cfg_file = get_config_file()
+        with open(cfg_file, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=4, ensure_ascii=False)
         return True
     except Exception:
         return False
-

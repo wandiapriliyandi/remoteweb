@@ -1,9 +1,10 @@
-"""Modul pemantau browser dan penegak aturan pemblokiran di Windows."""
+"""Modul pemantau browser, inspeksi URL address bar, dan penutupan otomatis tab terlarang."""
 import ctypes
 from ctypes import wintypes, byref
 import time
 import os
-from typing import Optional, Tuple, List, Callable
+import re
+from typing import Optional, Tuple, List, Set
 
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
@@ -23,11 +24,33 @@ BROWSER_PROCESSES = {
     "opera.exe": "Opera"
 }
 
+def expand_rules(rules: List[str]) -> Set[str]:
+    """
+    Mengembangkan daftar aturan agar mencakup nama domain dan nama kata kunci intinya.
+    Contoh: 'youtube.com' -> 'youtube.com' DAN 'youtube'
+    """
+    expanded = set()
+    for r in rules:
+        r = r.strip().lower()
+        if not r:
+            continue
+        expanded.add(r)
+        
+        # Bersihkan https://, http://, www.
+        clean = r.replace("https://", "").replace("http://", "").split("/")[0]
+        if clean.startswith("www."):
+            clean = clean[4:]
+        expanded.add(clean)
+
+        # Ambil nama inti jika berupa domain (misal: 'youtube' dari 'youtube.com')
+        parts = clean.split(".")
+        if len(parts) >= 2 and len(parts[0]) >= 3:
+            expanded.add(parts[0])
+
+    return expanded
+
 def force_foreground_window(hwnd: int):
-    """
-    Memaksa jendela target menjadi foreground aktif meskipun aplikasi pemanggil
-    sedang berada di latar belakang (background), menggunakan teknik AttachThreadInput.
-    """
+    """Memaksa jendela target menjadi foreground aktif."""
     try:
         fore_hwnd = user32.GetForegroundWindow()
         if fore_hwnd == hwnd:
@@ -36,54 +59,46 @@ def force_foreground_window(hwnd: int):
         fore_thread = user32.GetWindowThreadProcessId(fore_hwnd, None)
         cur_thread = kernel32.GetCurrentThreadId()
 
-        # Lampirkan thread input untuk melewati batasan keamanan SetForegroundWindow Windows
         user32.AttachThreadInput(cur_thread, fore_thread, True)
         user32.ShowWindow(hwnd, SW_RESTORE)
         user32.BringWindowToTop(hwnd)
         user32.SetForegroundWindow(hwnd)
         user32.AttachThreadInput(cur_thread, fore_thread, False)
-    except Exception as e:
+    except Exception:
         try:
             user32.SetForegroundWindow(hwnd)
         except Exception:
             pass
 
 def close_active_tab(hwnd: int):
-    """
-    Menutup tab yang sedang aktif di browser dengan mengirimkan kombinasi Ctrl + W secara handal.
-    """
+    """Menutup tab yang sedang aktif di browser dengan kombinasi Ctrl + W."""
     try:
         force_foreground_window(hwnd)
-        time.sleep(0.06)
+        time.sleep(0.04)
 
         scan_ctrl = user32.MapVirtualKeyW(VK_CONTROL, 0)
         scan_w = user32.MapVirtualKeyW(VK_W, 0)
 
-        # Tekan Ctrl + W (dengan scancode agar dikenali peramban Chromium/Firefox)
         user32.keybd_event(VK_CONTROL, scan_ctrl, 0, 0)
         user32.keybd_event(VK_W, scan_w, 0, 0)
-        time.sleep(0.08)
+        time.sleep(0.06)
         user32.keybd_event(VK_W, scan_w, KEYEVENTF_KEYUP, 0)
         user32.keybd_event(VK_CONTROL, scan_ctrl, KEYEVENTF_KEYUP, 0)
     except Exception:
-        # Fallback jika gagal: kirim pesan close ke jendela
         try:
             user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
         except Exception:
             pass
 
 def close_entire_window(hwnd: int):
-    """Menutup seluruh jendela browser secara paksa."""
+    """Menutup seluruh jendela peramban seketika."""
     try:
         user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
     except Exception:
         pass
 
 def get_active_window_info() -> Tuple[int, str, str]:
-    """
-    Mendapatkan handle jendela aktif (hwnd), judul jendela (title),
-    dan nama proses eksekutabel (process_name).
-    """
+    """Mendapatkan handle jendela aktif (hwnd), judul, dan nama file proses."""
     hwnd = user32.GetForegroundWindow()
     if not hwnd:
         return 0, "", ""
@@ -107,29 +122,37 @@ def get_active_window_info() -> Tuple[int, str, str]:
 
     return hwnd, title, process_name
 
+def get_browser_address_bar_value() -> str:
+    """Mencoba membaca teks kolom alamat URL (Address Bar) menggunakan UI Automation."""
+    try:
+        import uiautomation as auto
+        fg = auto.GetForegroundControl()
+        if fg:
+            edit = fg.EditControl(searchDepth=5)
+            if edit.Exists(0, 0):
+                val = edit.GetValuePattern().Value
+                if val:
+                    return val.strip().lower()
+    except Exception:
+        pass
+    return ""
+
 def find_top_browser_window() -> Tuple[int, str, str]:
-    """
-    Mencari jendela browser yang sedang dibuka di Windows,
-    baik jendela yang sedang di depan (foreground) maupun jendela browser teratas.
-    """
-    # 1. Cek dulu apakah jendela foreground saat ini adalah browser
+    """Mencari jendela browser yang sedang dibuka pengguna."""
     hwnd, title, proc_name = get_active_window_info()
     if proc_name in BROWSER_PROCESSES:
         return hwnd, title, BROWSER_PROCESSES.get(proc_name, proc_name)
 
-    # 2. Jika bukan foreground (misal admin remote klik saat user sedang tidak aktif),
-    # cari jendela browser yang terlihat (visible) di layar
     found_hwnd = 0
     found_title = ""
     found_name = ""
 
     WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
 
-    def enum_windows_callback(h, lparam):
+    def enum_cb(h, lparam):
         nonlocal found_hwnd, found_title, found_name
         if not user32.IsWindowVisible(h):
             return True
-
         length = user32.GetWindowTextLengthW(h)
         if length == 0:
             return True
@@ -153,26 +176,30 @@ def find_top_browser_window() -> Tuple[int, str, str]:
                 found_hwnd = h
                 found_title = t
                 found_name = BROWSER_PROCESSES.get(pname, pname)
-                return False # Berhenti enumerasi, ambil yang pertama
+                return False
         return True
 
-    user32.EnumWindows(WNDENUMPROC(enum_windows_callback), 0)
+    user32.EnumWindows(WNDENUMPROC(enum_cb), 0)
     return found_hwnd, found_title, found_name
 
 class BrowserWatcher:
-    def __init__(self, check_interval: float = 0.5):
+    def __init__(self, check_interval: float = 0.3):
         self.check_interval = check_interval
         self.is_running = False
-        self.blocked_rules: List[str] = []
+        self.blocked_keywords: Set[str] = set()
 
     def update_rules(self, rules: List[str]):
-        self.blocked_rules = [r.strip().lower() for r in rules if r.strip()]
+        """Memperbarui daftar aturan dan mengekspansinya menjadi kata kunci komprehensif."""
+        self.blocked_keywords = expand_rules(rules)
 
-    def is_violating(self, title: str, url_or_snippet: str) -> Tuple[bool, str]:
-        content_to_check = f"{title.lower()} {url_or_snippet.lower()}"
-        for rule in self.blocked_rules:
-            if rule in content_to_check:
-                return True, rule
+    def is_violating(self, title: str, url_bar_text: str) -> Tuple[bool, str]:
+        """
+        Mengecek apakah judul halaman ATAU teks kolom URL melanggar salah satu kata kunci.
+        """
+        combined = f"{title.lower()} {url_bar_text.lower()}"
+        for kw in self.blocked_keywords:
+            if kw in combined:
+                return True, kw
         return False, ""
 
     def inspect_once(self) -> Optional[Tuple[str, str, str, bool, str]]:
@@ -186,11 +213,17 @@ class BrowserWatcher:
         if not is_browser or not title:
             return None
 
-        is_blocked, matched_rule = self.is_violating(title, "")
+        # Baca teks kolom alamat URL jika bisa
+        url_text = get_browser_address_bar_value()
+
+        # Evaluasi apakah judul ATAU url_text melanggar aturan
+        is_blocked, matched_rule = self.is_violating(title, url_text)
+
+        display_text = f"URL: {url_text}" if url_text else title
 
         if is_blocked:
-            # Langsung tutup tab browser tersebut secara handal!
+            # Langsung tutup tab yang melanggar seketika!
             close_active_tab(hwnd)
-            return (browser_name, title, f"[TERBLOKIR: {matched_rule}]", True, matched_rule)
+            return (browser_name, title, f"[TERBLOKIR: {matched_rule}] {display_text}", True, matched_rule)
 
-        return (browser_name, title, title, False, "")
+        return (browser_name, title, display_text, False, "")

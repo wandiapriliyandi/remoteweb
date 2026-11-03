@@ -1,27 +1,36 @@
-"""Penyimpanan lokal untuk daftar domain yang diblokir."""
+"""Penyimpanan lokal untuk daftar domain dan kata kunci yang diblokir."""
 import json
 import os
+import sys
 from typing import List
 
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), "blocked_sites.json")
+def get_config_file() -> str:
+    """Mendapatkan path penyimpanan file konfigurasi yang persisten."""
+    if getattr(sys, 'frozen', False):
+        base = os.path.dirname(sys.executable)
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, "blocked_sites.json")
 
 DEFAULT_DOMAINS = [
-    "youtube.com",
-    "facebook.com",
-    "instagram.com",
-    "tiktok.com",
-    "twitter.com",
-    "x.com",
-    "roblox.com"
+    "youtube",
+    "facebook",
+    "instagram",
+    "tiktok",
+    "twitter",
+    "roblox",
+    "judi",
+    "slot"
 ]
 
 def load_blocked_domains() -> List[str]:
-    """Memuat daftar domain yang diblokir dari file JSON."""
-    if not os.path.exists(CONFIG_FILE):
+    """Memuat daftar kata kunci/domain yang diblokir."""
+    cfg_file = get_config_file()
+    if not os.path.exists(cfg_file):
         save_blocked_domains(DEFAULT_DOMAINS)
         return DEFAULT_DOMAINS.copy()
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(cfg_file, "r", encoding="utf-8") as f:
             data = json.load(f)
             if isinstance(data, list):
                 return data
@@ -30,13 +39,12 @@ def load_blocked_domains() -> List[str]:
         return DEFAULT_DOMAINS.copy()
 
 def save_blocked_domains(domains: List[str]) -> bool:
-    """Menyimpan daftar domain ke file JSON."""
+    """Menyimpan daftar kata kunci/domain ke file JSON."""
     try:
-        # Bersihkan spasi dan huruf kecilkan
+        cfg_file = get_config_file()
         clean_domains = sorted(list(set(d.strip().lower() for d in domains if d.strip())))
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(cfg_file, "w", encoding="utf-8") as f:
             json.dump(clean_domains, f, indent=4, ensure_ascii=False)
         return True
     except Exception:
         return False
-
