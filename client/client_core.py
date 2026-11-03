@@ -41,6 +41,7 @@ class ClientEngine:
         self.is_running = False
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._ws = None
+        self._has_logged_connect = False
 
         # Callbacks untuk GUI
         self.on_log: Optional[Callable[[str], None]] = None
@@ -60,10 +61,10 @@ class ClientEngine:
         self.config["server_ip"] = self.server_ip
         self.config["server_port"] = self.server_port
         save_client_config(self.config)
-        self.log(f"Alamat server diperbarui ke ws://{self.server_ip}:{self.server_port}")
+        self._has_logged_connect = False
+        self.log(f"Alamat server diatur ke ws://{self.server_ip}:{self.server_port}")
 
     def start(self):
-        """Menjalankan engine client dan watcher."""
         if self.is_running:
             return
         self.is_running = True
@@ -76,20 +77,23 @@ class ClientEngine:
 
     def _run_browser_watcher(self):
         """Loop pemantau jendela browser di PC client."""
-        last_title = ""
+        last_reported_title = ""
         while self.is_running:
             try:
                 res = self.watcher.inspect_once()
                 if res:
                     browser_name, title, detected_info, is_blocked, matched_rule = res
-                    if title != last_title or is_blocked:
-                        last_title = title
-                        status_str = f"BLOKIR [{matched_rule}]" if is_blocked else "Normal"
-                        self.log(f"Browser: {browser_name} | {title[:50]}... [{status_str}]")
 
-                        if self.on_activity_detected:
-                            self.on_activity_detected(browser_name, title, is_blocked)
+                    # Hanya log ke tampilan lokal jika terjadi PEMBLOKIRAN
+                    if is_blocked:
+                        self.log(f"🚨 Situs terlarang ('{matched_rule}') terdeteksi pada {browser_name} -> TAB DITUTUP!")
 
+                    if self.on_activity_detected:
+                        self.on_activity_detected(browser_name, title, is_blocked)
+
+                    # Kirim laporan ke server hanya jika judul berubah atau terblokir
+                    if title != last_reported_title or is_blocked:
+                        last_reported_title = title
                         if self.is_connected and self._ws and self._loop:
                             payload = {
                                 "browser": browser_name,
@@ -112,24 +116,32 @@ class ClientEngine:
         self._loop.run_until_complete(self._connect_loop())
 
     async def _connect_loop(self):
+        was_connected = False
         while self.is_running:
             uri = f"ws://{self.server_ip}:{self.server_port}"
             try:
-                self.log(f"Menghubungkan ke server {uri}...")
-                async with websockets.connect(uri, ping_interval=15, ping_timeout=10) as ws:
+                async with websockets.connect(uri, ping_interval=20, ping_timeout=15) as ws:
                     self._ws = ws
                     self.is_connected = True
-                    self.log("✅ Berhasil terhubung ke PC Server!")
+                    was_connected = True
+
+                    # Hanya log sekali saat status berubah menjadi terhubung
+                    if not self._has_logged_connect:
+                        self.log("✅ Berhasil terhubung ke PC Server Admin.")
+                        self._has_logged_connect = True
+
                     if self.on_connection_status:
                         self.on_connection_status(True)
 
+                    # Registrasi ke server
                     reg_msg = create_message(TYPE_REGISTER, {
                         "client_id": self.client_id,
                         "hostname": self.hostname,
-                        "rules_count": len(self.watcher.blocked_rules)
+                        "rules_count": len(self.watcher.blocked_keywords)
                     })
                     await ws.send(reg_msg)
 
+                    # Dengarkan pesan dari server
                     async for raw_msg in ws:
                         msg = parse_message(raw_msg)
                         mtype = msg.get("type")
@@ -140,7 +152,7 @@ class ClientEngine:
                             self.watcher.update_rules(new_rules)
                             self.config["cached_rules"] = new_rules
                             save_client_config(self.config)
-                            self.log(f"Menerima pembaruan aturan ({len(new_rules)} kata kunci/domain).")
+                            self.log(f"📥 Aturan diperbarui oleh Admin ({len(new_rules)} situs/kata kunci).")
 
                         elif mtype == TYPE_FORCE_CLOSE:
                             mode = payload.get("mode", "tab")
@@ -148,12 +160,10 @@ class ClientEngine:
                             if hwnd:
                                 if mode == "window":
                                     close_entire_window(hwnd)
-                                    self.log(f"🚨 Menutup seluruh jendela browser {bname} ('{btitle[:30]}...')")
+                                    self.log(f"🛑 Menutup jendela browser {bname} atas perintah Admin.")
                                 else:
                                     close_active_tab(hwnd)
-                                    self.log(f"🚨 Menutup tab aktif browser {bname} ('{btitle[:30]}...')")
-                            else:
-                                self.log("Perintah tutup tab diterima, tetapi tidak ada jendela browser aktif yang ditemukan.")
+                                    self.log(f"🛑 Menutup tab browser {bname} atas perintah Admin.")
 
                         elif mtype == TYPE_PING:
                             await ws.send(create_message(TYPE_PONG))
@@ -161,9 +171,18 @@ class ClientEngine:
             except (websockets.exceptions.ConnectionClosed, OSError, Exception):
                 self.is_connected = False
                 self._ws = None
+
+                # Catat putus koneksi HANYA jika sebelumnya pernah terhubung
+                if was_connected:
+                    self.log("⚠️ Koneksi ke server terputus. Mencoba menghubungkan kembali...")
+                    was_connected = False
+                    self._has_logged_connect = False
+
                 if self.on_connection_status:
                     self.on_connection_status(False)
-                await asyncio.sleep(4)
+
+                # Menunggu sebelum mencoba rekoneksi secara diam-diam tanpa membanjiri log
+                await asyncio.sleep(5)
 
     def stop(self):
         self.is_running = False

@@ -110,7 +110,7 @@ class RemoteServerEngine:
                     
                     self.clients[client_id] = client_session
                     self.ws_to_id[websocket] = client_id
-                    self.log(f"PC Client Terhubung: {hostname} ({remote_ip})")
+                    self.log(f"🟢 PC Client Terhubung: {hostname} ({remote_ip})")
 
                     if self.active_rules:
                         sync_msg = create_message(TYPE_UPDATE_RULES, {"rules": self.active_rules})
@@ -131,7 +131,7 @@ class RemoteServerEngine:
 
                         if is_blocked:
                             client_session.violation_count += 1
-                            self.log(f"⚠️ [PELANGGARAN] {client_session.hostname} mencoba membuka: '{client_session.current_title[:40]}' -> TAB DITUTUP OTOMATIS!")
+                            self.log(f"🚨 [BLOKIR] {client_session.hostname} mencoba membuka: '{client_session.current_title[:40]}' -> TAB DITUTUP OTOMATIS!")
 
                         if self.on_clients_changed:
                             self.on_clients_changed()
@@ -142,14 +142,14 @@ class RemoteServerEngine:
         except websockets.exceptions.ConnectionClosed:
             pass
         except Exception as e:
-            self.log(f"Error client: {e}")
+            pass
         finally:
             if websocket in self.ws_to_id:
                 cid = self.ws_to_id.pop(websocket)
                 if cid in self.clients:
                     hname = self.clients[cid].hostname
                     del self.clients[cid]
-                    self.log(f"PC Client terputus: {hname} ({remote_ip})")
+                    self.log(f"🔴 PC Client Terputus: {hname} ({remote_ip})")
                     if self.on_clients_changed:
                         self.on_clients_changed()
 
