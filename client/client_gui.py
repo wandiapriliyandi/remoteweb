@@ -1,15 +1,28 @@
-"""Antarmuka GUI Client Desktop (PC Target)."""
+"""Antarmuka GUI Client Desktop (PC Target) dengan Integrasi System Tray."""
 import os
 import sys
+import threading
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
+from PIL import Image, ImageDraw
+import pystray
 
 from client.client_core import ClientEngine
 from client.autostart import is_autostart_enabled, enable_autostart, disable_autostart
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
+
+def create_tray_icon_image():
+    """Membuat ikon perisai untuk System Tray."""
+    img = Image.new("RGBA", (64, 64), color=(0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    # Gambar lingkaran biru dengan perisai
+    draw.ellipse([2, 2, 62, 62], fill="#0284c7", outline="#38bdf8", width=3)
+    # Gambar huruf M atau simbol pengawasan putih di tengah
+    draw.polygon([(32, 14), (48, 22), (48, 40), (32, 50), (16, 40), (16, 22)], fill="#ffffff")
+    return img
 
 class ClientApp(ctk.CTk):
     def __init__(self):
@@ -24,10 +37,20 @@ class ClientApp(ctk.CTk):
         self.engine.on_connection_status = self._on_connection_change_threadsafe
         self.engine.on_activity_detected = self._on_activity_detected_threadsafe
 
+        # System tray setup
+        self.tray_icon = None
+        self._is_in_tray = False
+
         self._build_ui()
 
-        # Atur agar saat tombol X (Close) diklik, jendela hanya sembunyi dan TETAP AKTIF di background
-        self.protocol("WM_DELETE_WINDOW", self._on_close_clicked)
+        # 1. Tombol X (Close) NORMAL: menutup aplikasi sepenuhnya seperti umumnya
+        self.protocol("WM_DELETE_WINDOW", self._on_exit)
+
+        # 2. Tombol Minimize (_): otomatis menyembunyikan jendela ke System Tray
+        self.bind("<Unmap>", self._on_minimize_to_tray)
+
+        # Inisialisasi System Tray Icon di latar belakang
+        self._setup_tray()
 
         # Jalankan engine client
         self.engine.start()
@@ -97,7 +120,6 @@ class ClientApp(ctk.CTk):
         )
         self.switch_autostart.pack(side="left")
 
-        # Set status switch berdasarkan registry Windows saat ini
         if is_autostart_enabled():
             self.switch_autostart.select()
         else:
@@ -140,18 +162,71 @@ class ClientApp(ctk.CTk):
         self.txt_log = ctk.CTkTextbox(log_frame, font=ctk.CTkFont(family="Consolas", size=11))
         self.txt_log.pack(fill="both", expand=True, padx=12, pady=(0, 6))
 
-        # 5. Tombol Sembunyikan ke Background
+        # 5. Tombol Sembunyikan ke Tray
         bottom_frame = ctk.CTkFrame(self, fg_color="transparent")
         bottom_frame.pack(fill="x", padx=16, pady=(4, 16))
 
         btn_minimize = ctk.CTkButton(
             bottom_frame,
-            text="Sembunyikan Jendela (Jalan di Latar Belakang)",
-            fg_color="#475569",
-            hover_color="#334155",
-            command=self._minimize_to_bg
+            text="📥 Sembunyikan ke System Tray",
+            fg_color="#0369a1",
+            hover_color="#0284c7",
+            command=self._hide_to_tray
         )
         btn_minimize.pack(side="right")
+
+    def _setup_tray(self):
+        """Menyiapkan ikon System Tray di Windows taskbar (pojok kanan bawah)."""
+        image = create_tray_icon_image()
+        menu = pystray.Menu(
+            pystray.MenuItem("Buka Aplikasi", self._show_from_tray, default=True),
+            pystray.MenuItem("Keluar (Exit)", self._exit_from_tray)
+        )
+        self.tray_icon = pystray.Icon("RemotePCClient", image, "Remote Web Monitor Client", menu)
+
+        # Jalankan tray di thread terpisah
+        threading.Thread(target=self.tray_icon.run, daemon=True).start()
+
+    def _on_minimize_to_tray(self, event=None):
+        """Dipicu saat tombol minimize (_) ditekan di pojok kanan atas jendela."""
+        if self.state() == "iconic" and not self._is_in_tray:
+            self._is_in_tray = True
+            # Berikan sedikit jeda sebelum withdraw agar animasi Windows selesai
+            self.after(50, self._perform_hide_to_tray)
+
+    def _perform_hide_to_tray(self):
+        self.withdraw()
+        self._append_log("Aplikasi diminimalkan ke System Tray (Pojok kanan bawah dekat jam).")
+
+    def _hide_to_tray(self):
+        """Sembunyikan jendela manual ke System Tray."""
+        self._is_in_tray = True
+        self.withdraw()
+        self._append_log("Aplikasi disembunyikan ke System Tray.")
+
+    def _show_from_tray(self, icon=None, item=None):
+        """Memunculkan kembali jendela dari System Tray ke layar."""
+        self.after(0, self._restore_window)
+
+    def _restore_window(self):
+        self._is_in_tray = False
+        self.deiconify()
+        self.state("normal")
+        self.focus_force()
+
+    def _exit_from_tray(self, icon=None, item=None):
+        """Keluar sepenuhnya dari menu klik kanan System Tray."""
+        self.after(0, self._on_exit)
+
+    def _on_exit(self):
+        """Tutup normal ketika tombol X ditekan atau menu Keluar dipilih."""
+        if self.tray_icon:
+            try:
+                self.tray_icon.stop()
+            except Exception:
+                pass
+        self.engine.stop()
+        self.destroy()
 
     def _apply_server_ip(self):
         ip = self.entry_ip.get().strip()
@@ -181,15 +256,6 @@ class ClientApp(ctk.CTk):
             else:
                 self.switch_autostart.select()
                 messagebox.showerror("Gagal", "Gagal menonaktifkan auto-start di registry Windows.")
-
-    def _on_close_clicked(self):
-        """Ketika tombol X (Close) diklik, sembunyikan jendela agar tetap aktif memantau di background."""
-        self.withdraw()
-        self._append_log("Jendela ditutup tetapi aplikasi TETAP AKTIF di latar belakang.")
-
-    def _minimize_to_bg(self):
-        self.withdraw()  # Sembunyikan jendela dari taskbar
-        self._append_log("Aplikasi disembunyikan. Tetap memantau di latar belakang.")
 
     def _on_connection_change_threadsafe(self, is_online: bool):
         self.after(0, lambda: self._update_connection_badge(is_online))
@@ -223,14 +289,9 @@ class ClientApp(ctk.CTk):
         self.txt_log.insert("end", entry)
         self.txt_log.see("end")
 
-    def destroy(self):
-        self.engine.stop()
-        super().destroy()
-
 def run_client_gui():
     app = ClientApp()
     app.mainloop()
 
 if __name__ == "__main__":
     run_client_gui()
-
