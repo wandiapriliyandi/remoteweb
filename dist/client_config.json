@@ -1,0 +1,16 @@
+{
+    "client_id": "de4d2266-5eb",
+    "server_ip": "127.0.0.1",
+    "server_port": 8765,
+    "auto_minimize": true,
+    "cached_rules": [
+        "facebook",
+        "instagram",
+        "judi",
+        "roblox",
+        "slot",
+        "tiktok",
+        "twitter",
+        "youtube"
+    ]
+}
