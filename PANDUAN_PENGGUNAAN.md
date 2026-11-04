@@ -17,12 +17,16 @@ Aplikasi ini terdiri dari dua program desktop berbasis Python:
 
 ## 📦 Paket Installer Siap Pakai (.EXE)
 
-Tersedia file master installer terpadu di dalam folder `dist/`:
-- **`dist/Setup_RemoteMonitor.exe`**: Master Installer Wizard serba guna.
-  - Cukup jalankan file ini di komputer manapun.
-  - Terdapat pilihan:
-    - 🔘 **PC Client (Komputer Target yang Diawasi)**: Otomatis memasang ke komputer, membuat shortcut Desktop, dan mendaftarkan ke Windows Startup agar aktif di System Tray saat PC dinyalakan.
-    - 🔘 **PC Server (Komputer Admin Pemantau)**: Otomatis memasang dashboard Server Admin dan membuat shortcut Desktop.
+Tersedia file installer di dalam folder `dist/`:
+
+1. **`dist/Setup_Client.exe` (Disarankan untuk Komputer Target / Siswa / Karyawan)**:
+   - **Khusus Client Agent saja** (ukuran ringan, tidak dicampur dengan Server Admin).
+   - Pengguna target tidak akan melihat atau bisa mengakses dashboard server.
+   - Bisa langsung mengisi IP Server Admin saat instalasi.
+   - Otomatis mendaftarkan ke Windows Startup dan terminimalkan ke System Tray.
+
+2. **`dist/Setup_RemoteMonitor.exe` (Installer Gabungan Admin)**:
+   - Master Installer Wizard serba guna dengan opsi memilih instalasi Server Admin atau Client Target.
 
 ---
 
@@ -71,5 +75,9 @@ Jika Anda ingin aplikasi ini berupa file `.exe` yang bisa langsung diklik dua ka
 2. **Untuk Client**:
    ```bash
    pyinstaller --noconsole --onefile run_client.py
+   ```
+3. **Untuk Installer Khusus Client**:
+   ```bash
+   pyinstaller --noconsole --onefile --collect-all customtkinter --add-data "dist/ClientAgent.exe;." -n Setup_Client installer/setup_client_gui.py
    ```
 File `.exe` siap pakai akan berada di dalam folder `dist/`.
