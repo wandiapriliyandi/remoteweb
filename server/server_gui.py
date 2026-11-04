@@ -892,13 +892,15 @@ class ServerApp(ctk.CTk):
 
     def _start_background_update_check(self):
         """Memulai pengecekan update GitHub secara senyap di background thread saat startup."""
-        threading.Thread(target=lambda: self._check_github_update_action(silent=True), daemon=True).start()
+        threading.Thread(target=lambda: self._check_github_update_worker(silent=True), daemon=True).start()
 
     def _check_github_update_action(self, silent: bool = False):
-        """Memeriksa update rilis di GitHub."""
+        """Pengecekan update manual dengan tombol yang responsif di background thread."""
         if not silent:
             self.btn_check_update.configure(text="⏳ Memeriksa...", state="disabled")
+        threading.Thread(target=lambda: self._check_github_update_worker(silent=silent), daemon=True).start()
 
+    def _check_github_update_worker(self, silent: bool = False):
         info = check_github_update()
 
         def _update_ui():
@@ -919,7 +921,7 @@ class ServerApp(ctk.CTk):
                 if not silent:
                     err = info.get("error")
                     if err:
-                        messagebox.showinfo("Status Update", f"Informasi GitHub:\n{err}")
+                        messagebox.showinfo("Status Update", "Informasi GitHub:\n" + str(err))
                     else:
                         self._append_log(f"Pengecekan update selesai ({time.strftime('%H:%M:%S')}): Server sudah menggunakan versi terbaru (v{APP_VERSION}).")
                         messagebox.showinfo(

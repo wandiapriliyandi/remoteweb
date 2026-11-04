@@ -29,18 +29,8 @@ def get_server_exe_path() -> str:
 
 def check_github_update() -> Dict[str, Any]:
     """
-    Mengecek ketersediaan rilis baru di GitHub Releases.
-    Mengembalikan dictionary status:
-    {
-        "has_update": bool,
-        "latest_version": str,
-        "current_version": str,
-        "server_asset_url": Optional[str],
-        "client_asset_url": Optional[str],
-        "release_notes": str,
-        "html_url": str,
-        "error": Optional[str]
-    }
+    Mengecek rilis terbaru di GitHub tanpa batasan kuota (Rate-Limit Free)
+    menggunakan redirect publik https://github.com/<repo>/releases/latest.
     """
     result = {
         "has_update": False,
@@ -53,6 +43,30 @@ def check_github_update() -> Dict[str, Any]:
         "error": None
     }
 
+    # 1. Metode Utama: Redirect publik (Bebas Rate-Limit 100%)
+    try:
+        latest_url = f"https://github.com/{GITHUB_REPO}/releases/latest"
+        req = urllib.request.Request(
+            latest_url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        )
+        with urllib.request.urlopen(req, timeout=8) as response:
+            final_url = response.geturl()
+            tag_name = final_url.split("/")[-1].lstrip("v").strip()
+
+        if tag_name:
+            result["latest_version"] = tag_name
+            result["html_url"] = final_url
+            result["server_asset_url"] = f"https://github.com/{GITHUB_REPO}/releases/download/v{tag_name}/ServerAdmin.exe"
+            result["client_asset_url"] = f"https://github.com/{GITHUB_REPO}/releases/download/v{tag_name}/ClientAgent.exe"
+
+            if is_newer_version(tag_name, APP_VERSION):
+                result["has_update"] = True
+            return result
+    except Exception as e_redirect:
+        pass
+
+    # 2. Metode Cadangan: GitHub REST API
     try:
         req = urllib.request.Request(
             GITHUB_API_URL,
@@ -69,7 +83,6 @@ def check_github_update() -> Dict[str, Any]:
         result["release_notes"] = data.get("body", "")
         result["html_url"] = data.get("html_url", result["html_url"])
 
-        # Cari file asset yang cocok di release (utamakan nama persis)
         assets = data.get("assets", [])
         for asset in assets:
             name = asset.get("name", "").lower()
@@ -79,28 +92,12 @@ def check_github_update() -> Dict[str, Any]:
             elif name == "clientagent.exe":
                 result["client_asset_url"] = url
 
-        # Fallback jika nama persis tidak ditemukan
         if not result["server_asset_url"]:
-            for asset in assets:
-                name = asset.get("name", "").lower()
-                if "serveradmin" in name and name.endswith(".exe"):
-                    result["server_asset_url"] = asset.get("browser_download_url")
-                    break
-        if not result["client_asset_url"]:
-            for asset in assets:
-                name = asset.get("name", "").lower()
-                if "clientagent" in name and name.endswith(".exe"):
-                    result["client_asset_url"] = asset.get("browser_download_url")
-                    break
+            result["server_asset_url"] = f"https://github.com/{GITHUB_REPO}/releases/download/v{tag_name}/ServerAdmin.exe"
 
         if is_newer_version(tag_name, APP_VERSION):
             result["has_update"] = True
 
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            result["error"] = "Belum ada rilis resmi (Release) yang dipublikasikan di repositori GitHub."
-        else:
-            result["error"] = f"HTTP Error {e.code}: {e.reason}"
     except Exception as e:
         result["error"] = f"Gagal memeriksa pembaruan: {e}"
 
