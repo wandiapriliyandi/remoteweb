@@ -1,4 +1,4 @@
-"""Engine WebSocket Client & integrasi pemantau browser."""
+"""Engine WebSocket Client & integrasi pemantau browser dengan Auto-Updater."""
 import asyncio
 import json
 import os
@@ -9,14 +9,18 @@ from typing import Callable, Optional
 import websockets
 
 from shared.protocol import (
+    APP_VERSION,
     TYPE_REGISTER,
     TYPE_URL_ACTIVITY,
     TYPE_UPDATE_RULES,
     TYPE_FORCE_CLOSE,
     TYPE_PING,
     TYPE_PONG,
+    TYPE_UPDATE_AVAILABLE,
+    TYPE_UPDATE_PROGRESS,
     create_message,
-    parse_message
+    parse_message,
+    is_newer_version
 )
 from client.browser_watcher import (
     BrowserWatcher,
@@ -25,6 +29,7 @@ from client.browser_watcher import (
     find_top_browser_window
 )
 from client.config import load_client_config, save_client_config
+from client.updater import perform_auto_update
 
 class ClientEngine:
     def __init__(self):
@@ -42,6 +47,7 @@ class ClientEngine:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._ws = None
         self._has_logged_connect = False
+        self._is_updating = False
 
         # Callbacks untuk GUI
         self.on_log: Optional[Callable[[str], None]] = None
@@ -133,11 +139,12 @@ class ClientEngine:
                     if self.on_connection_status:
                         self.on_connection_status(True)
 
-                    # Registrasi ke server
+                    # Registrasi ke server dengan menyertakan versi
                     reg_msg = create_message(TYPE_REGISTER, {
                         "client_id": self.client_id,
                         "hostname": self.hostname,
-                        "rules_count": len(self.watcher.blocked_keywords)
+                        "rules_count": len(self.watcher.blocked_keywords),
+                        "version": APP_VERSION
                     })
                     await ws.send(reg_msg)
 
@@ -165,6 +172,23 @@ class ClientEngine:
                                     close_active_tab(hwnd)
                                     self.log(f"🛑 Menutup tab browser {bname} atas perintah Admin.")
 
+                        elif mtype == TYPE_UPDATE_AVAILABLE:
+                            target_ver = payload.get("version", "")
+                            download_url = payload.get("download_url", "")
+                            changelog = payload.get("changelog", "")
+                            self.log(f"🔔 Server menawarkan update versi v{target_ver}: {changelog}")
+
+                            if not self._is_updating and is_newer_version(target_ver, APP_VERSION):
+                                self._is_updating = True
+                                self.log(f"🚀 Memulai unduhan otomatis v{target_ver} dari Server...")
+                                threading.Thread(
+                                    target=self._execute_auto_update,
+                                    args=(download_url, target_ver),
+                                    daemon=True
+                                ).start()
+                            else:
+                                self.log(f"Aplikasi sudah pada versi terbaru (v{APP_VERSION}).")
+
                         elif mtype == TYPE_PING:
                             await ws.send(create_message(TYPE_PONG))
 
@@ -181,8 +205,31 @@ class ClientEngine:
                 if self.on_connection_status:
                     self.on_connection_status(False)
 
-                # Menunggu sebelum mencoba rekoneksi secara diam-diam tanpa membanjiri log
-                await asyncio.sleep(5)
+            # Jeda sebelum mencoba reconnect
+            time.sleep(3)
+
+    def _execute_auto_update(self, download_url: str, target_ver: str):
+        """Menjalankan proses auto-update di thread terpisah dan melaporkan progres ke Server."""
+        def _on_status(status: str, percent: int):
+            if status == "downloading":
+                self.log(f"📥 Mengunduh update: {percent}%")
+            elif status == "installing":
+                self.log("⚙️ Mengganti file program dan merestart client...")
+            elif status == "failed":
+                self.log("❌ Gagal memperbarui aplikasi dari server.")
+                self._is_updating = False
+
+            # Laporkan ke Server Admin via WebSocket jika koneksi aktif
+            if self.is_connected and self._ws and self._loop:
+                msg = create_message(TYPE_UPDATE_PROGRESS, {
+                    "client_id": self.client_id,
+                    "status": status,
+                    "percent": percent,
+                    "version": target_ver
+                })
+                asyncio.run_coroutine_threadsafe(self._ws.send(msg), self._loop)
+
+        perform_auto_update(download_url, _on_status)
 
     def stop(self):
         self.is_running = False

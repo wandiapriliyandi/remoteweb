@@ -1,4 +1,4 @@
-"""GUI Server Admin: Pemantau Browser & Filter Web Real-time."""
+"""GUI Server Admin: Pemantau Browser & Filter Web Real-time dengan Kontrol Auto-Update."""
 import os
 import sys
 import tkinter as tk
@@ -6,6 +6,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 from typing import List
 
+from shared.protocol import APP_VERSION
 from server.server_core import RemoteServerEngine
 from server.storage import load_blocked_domains, save_blocked_domains
 
@@ -49,7 +50,7 @@ class ServerApp(ctk.CTk):
         title_lbl.pack(side="left", padx=16, pady=12)
 
         local_ip = self.engine.get_local_ip()
-        ip_info = f"Alamat Server: ws://{local_ip}:{self.engine.port}"
+        ip_info = f"ws://{local_ip}:{self.engine.port} (v{APP_VERSION})"
         self.lbl_server_info = ctk.CTkLabel(
             header,
             text=ip_info,
@@ -98,30 +99,28 @@ class ServerApp(ctk.CTk):
         btn_add = ctk.CTkButton(
             input_frame,
             text="Tambah",
-            width=75,
+            width=70,
             command=self._add_rule,
             fg_color="#0284c7",
             hover_color="#0369a1"
         )
         btn_add.pack(side="right")
 
-        # Scrollable list untuk aturan
+        # Daftar Aturan Scrollable
         self.scroll_rules = ctk.CTkScrollableFrame(left_frame, label_text="Daftar Aturan Aktif")
-        self.scroll_rules.pack(fill="both", expand=True, padx=12, pady=6)
+        self.scroll_rules.pack(fill="both", expand=True, padx=12, pady=8)
 
-        # Tombol aksi aturan
-        left_action_frame = ctk.CTkFrame(left_frame, fg_color="transparent")
-        left_action_frame.pack(fill="x", padx=12, pady=(4, 12))
-
-        btn_apply_all = ctk.CTkButton(
-            left_action_frame,
-            text="🚀 Terapkan ke SEMUA Client",
+        # Tombol Sinkronisasi
+        btn_sync = ctk.CTkButton(
+            left_frame,
+            text="🔄 Terapkan Aturan ke Semua Client",
             font=ctk.CTkFont(size=13, weight="bold"),
-            command=self._broadcast_rules_action,
-            fg_color="#dc2626",
-            hover_color="#b91c1c"
+            fg_color="#10b981",
+            hover_color="#059669",
+            height=36,
+            command=self._broadcast_rules_action
         )
-        btn_apply_all.pack(fill="x", pady=2)
+        btn_sync.pack(fill="x", padx=12, pady=(0, 12))
 
         # --- KOLOM KANAN: Live Monitoring Komputer Client ---
         right_frame = ctk.CTkFrame(main_pane, corner_radius=10)
@@ -137,6 +136,18 @@ class ServerApp(ctk.CTk):
             font=ctk.CTkFont(size=16, weight="bold")
         )
         self.lbl_client_count.pack(side="left")
+
+        # Tombol Perbarui Semua Client
+        self.btn_update_all = ctk.CTkButton(
+            right_top,
+            text="🚀 Perbarui Semua Client",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            height=32,
+            command=self._update_all_clients_action
+        )
+        self.btn_update_all.pack(side="right")
 
         # Daftar Client Scrollable (Live Cards)
         self.scroll_clients = ctk.CTkScrollableFrame(right_frame, label_text="Aktivitas Browser Real-time")
@@ -215,6 +226,46 @@ class ServerApp(ctk.CTk):
         self.engine.broadcast_rules(self.rules)
         self._append_log(f"Aturan berhasil disinkronkan ke {len(self.engine.clients)} PC Client.")
 
+    def _update_all_clients_action(self):
+        if not self.engine.clients:
+            messagebox.showinfo("Informasi", "Belum ada PC Client yang terhubung saat ini.")
+            return
+
+        exe_path = self.engine.find_client_exe_path()
+        if not exe_path or not os.path.exists(exe_path):
+            messagebox.showerror(
+                "File Tidak Ditemukan",
+                "File master 'ClientAgent.exe' tidak ditemukan di folder server.\nPastikan file ada di folder 'dist/ClientAgent.exe'."
+            )
+            return
+
+        if messagebox.askyesno(
+            "Konfirmasi Pembaruan",
+            f"Apakah Anda yakin ingin mengirimkan perintah pembaruan fitur (v{APP_VERSION}) ke {len(self.engine.clients)} client yang terhubung?\n\nClient akan otomatis mengunduh file baru dan langsung restart di System Tray."
+        ):
+            count = self.engine.broadcast_update(APP_VERSION)
+            self._append_log(f"🚀 Memulai siaran pembaruan v{APP_VERSION} ke {count} PC Client.")
+
+    def _update_single_client_action(self, client_id: str):
+        session = self.engine.clients.get(client_id)
+        if not session:
+            return
+
+        exe_path = self.engine.find_client_exe_path()
+        if not exe_path or not os.path.exists(exe_path):
+            messagebox.showerror(
+                "File Tidak Ditemukan",
+                "File master 'ClientAgent.exe' tidak ditemukan di folder server."
+            )
+            return
+
+        if messagebox.askyesno(
+            "Konfirmasi Pembaruan",
+            f"Perbarui client '{session.hostname}' ke versi {APP_VERSION}?"
+        ):
+            self.engine.update_single_client(client_id, APP_VERSION)
+            self._append_log(f"🚀 Mengirim instruksi update v{APP_VERSION} ke {session.hostname}.")
+
     def _update_client_list_threadsafe(self):
         self.after(0, self._render_clients_ui)
 
@@ -239,7 +290,7 @@ class ServerApp(ctk.CTk):
             card = ctk.CTkFrame(self.scroll_clients, fg_color="#1e293b", corner_radius=10)
             card.pack(fill="x", pady=6, padx=4)
 
-            # Baris 1: Hostname & IP & Status Pelanggaran
+            # Baris 1: Hostname & IP & Versi & Status Pelanggaran
             top_bar = ctk.CTkFrame(card, fg_color="transparent")
             top_bar.pack(fill="x", padx=12, pady=(8, 2))
 
@@ -260,7 +311,42 @@ class ServerApp(ctk.CTk):
                 padx=6,
                 pady=2
             )
-            ip_badge.pack(side="left", padx=10)
+            ip_badge.pack(side="left", padx=6)
+
+            v_color = "#0369a1" if session.version == APP_VERSION else "#b45309"
+            v_badge = ctk.CTkLabel(
+                top_bar,
+                text=f"v{session.version}",
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color=v_color,
+                text_color="#ffffff",
+                corner_radius=4,
+                padx=6,
+                pady=2
+            )
+            v_badge.pack(side="left", padx=4)
+
+            if session.update_status:
+                upd_badge = ctk.CTkLabel(
+                    top_bar,
+                    text=f"🔄 {session.update_status}",
+                    font=ctk.CTkFont(size=11),
+                    text_color="#38bdf8"
+                )
+                upd_badge.pack(side="left", padx=6)
+
+            # Tombol Update Satuan di sisi kanan
+            btn_upd_single = ctk.CTkButton(
+                top_bar,
+                text="Update",
+                width=60,
+                height=24,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color="#0284c7",
+                hover_color="#0369a1",
+                command=lambda c=cid: self._update_single_client_action(c)
+            )
+            btn_upd_single.pack(side="right", padx=(8, 0))
 
             viol_text = f"Pelanggaran: {session.violation_count}x"
             viol_color = "#ef4444" if session.violation_count > 0 else "#22c55e"

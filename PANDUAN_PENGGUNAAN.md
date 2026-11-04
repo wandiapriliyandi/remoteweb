@@ -12,6 +12,7 @@ Aplikasi ini terdiri dari dua program desktop berbasis Python:
 - **Live Monitor**: Admin server bisa melihat langsung situs apa yang sedang dibuka oleh client.
 - **Deteksi Cepat**: Jika pengguna membuka kata kunci atau domain terlarang (misal: YouTube, Facebook, judi, game), tab browser langsung ditutup secara instan dalam hitungan milidetik.
 - **Auto-Startup Windows (Silent Tray)**: Otomatis berjalan dan terminimalkan langsung ke System Tray saat komputer baru dinyalakan tanpa memunculkan jendela, tanpa mengurangi performa.
+- **Silent Auto-Update dari Server (LAN / WiFi)**: Memperbarui fitur di seluruh PC client secara massal langsung dari dashboard Server Admin tanpa perlu mendatangi PC target.
 
 ---
 
@@ -31,6 +32,20 @@ Tersedia file installer di dalam folder `dist/`:
 
 3. **`dist/Uninstall.exe` (Aplikasi Pencopotan / Uninstaller)**:
    - Menghapus aplikasi secara tuntas, menghentikan proses latar belakang, menghapus auto-start registry, dan membersihkan seluruh shortcut.
+
+---
+
+## 🔄 Cara Memperbarui Fitur Client Otomatis (Auto-Update)
+
+Jika Anda merilis pembaruan fitur baru untuk Client:
+1. Simpan file `ClientAgent.exe` versi baru di folder `dist/` PC Server Admin.
+2. Buka dashboard **Server Admin**.
+3. Di sudut kanan atas daftar client, klik tombol **"🚀 Perbarui Semua Client"** (atau klik tombol **"Update"** pada client tertentu).
+4. PC Server akan mengirimkan instruksi unduhan ke seluruh client via jaringan lokal (HTTP Port `8766`).
+5. PC Client akan:
+   - Mengunduh file baru secara senyap di latar belakang.
+   - Mengganti file exe lama tanpa bentrok file-lock.
+   - Merestart dirinya secara otomatis langsung ke **System Tray** dengan fitur terbaru.
 
 ---
 
@@ -75,11 +90,12 @@ Terdapat 3 cara mudah untuk menghapus aplikasi dari komputer:
 - **Terapkan ke Semua Client**: Sekali klik, semua client akan menerima aturan baru dan langsung menerapkannya seketika.
 - **Live Feed Tab**: Melihat judul halaman atau situs yang sedang dibuka oleh setiap PC client secara langsung.
 - **Paksa Tutup Tab (Force Close)**: Tombol darurat bagi admin untuk langsung menutup tab browser yang sedang dibuka di PC client tertentu dari jarak jauh.
+- **Pembaruan Fitur Massal**: Memperbarui aplikasi client di semua komputer hanya dengan satu klik.
 
 ---
 
 ## 📦 Mengubah Menjadi File .EXE (Opsional)
-Jika Anda ingin aplikasi ini berupa file `.exe` yang bisa langsung diklik dua kali tanpa harus membuka terminal:
+Jika Anda ingin mengompilasi ulang file `.exe`:
 
 1. **Untuk Server**:
    ```bash
@@ -87,7 +103,7 @@ Jika Anda ingin aplikasi ini berupa file `.exe` yang bisa langsung diklik dua ka
    ```
 2. **Untuk Client**:
    ```bash
-   pyinstaller --noconsole --onefile run_client.py
+   pyinstaller --noconsole --onefile --collect-all customtkinter -n ClientAgent run_client.py
    ```
 3. **Untuk Uninstaller**:
    ```bash
