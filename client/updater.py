@@ -7,15 +7,14 @@ import subprocess
 from typing import Callable, Optional
 
 def get_target_exe_path() -> str:
-    """Mendapatkan path file ClientAgent.exe yang sedang berjalan atau terpasang."""
-    if getattr(sys, 'frozen', False):
-        return sys.executable
-    
-    # Mode development (python script): cari di AppData atau dist
+    """Mendapatkan path file ClientAgent.exe resmi di AppData atau executable aktif."""
     local_app_data = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
     installed = os.path.join(local_app_data, "RemotePCWebMonitor", "ClientAgent.exe")
     if os.path.exists(installed):
         return installed
+
+    if getattr(sys, 'frozen', False):
+        return sys.executable
 
     dist_exe = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist", "ClientAgent.exe"))
     return dist_exe
@@ -79,6 +78,8 @@ setlocal enabledelayedexpansion
 :: 1. Hapus variabel lingkungan PyInstaller agar executable baru tidak mewarisi cache MEIPASS lama
 set _MEIPASS2=
 set _MEIPASS=
+set PYTHONHOME=
+set PYTHONPATH=
 
 :: 2. Berikan jeda agar proses lama berhenti sepenuhnya
 timeout /t 2 /nobreak > nul

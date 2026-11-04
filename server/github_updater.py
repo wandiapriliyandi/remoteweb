@@ -15,14 +15,14 @@ GITHUB_REPO = "wandiapriliyandi/remoteweb"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
 def get_server_exe_path() -> str:
-    """Mendapatkan path file ServerAdmin.exe yang sedang berjalan atau terpasang."""
-    if getattr(sys, 'frozen', False):
-        return sys.executable
-
+    """Mendapatkan path file ServerAdmin.exe resmi di AppData atau executable aktif."""
     local_app_data = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
     installed = os.path.join(local_app_data, "RemotePCWebMonitor", "ServerAdmin.exe")
     if os.path.exists(installed):
         return installed
+
+    if getattr(sys, 'frozen', False):
+        return sys.executable
 
     dist_exe = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist", "ServerAdmin.exe"))
     return dist_exe
@@ -163,6 +163,8 @@ setlocal enabledelayedexpansion
 :: 1. Hapus variabel lingkungan PyInstaller agar executable baru tidak mewarisi cache MEIPASS lama
 set _MEIPASS2=
 set _MEIPASS=
+set PYTHONHOME=
+set PYTHONPATH=
 
 :: 2. Jeda agar aplikasi server berhenti sepenuhnya
 timeout /t 2 /nobreak > nul
