@@ -48,6 +48,63 @@ def get_base_dir():
         return sys._MEIPASS
     return os.path.dirname(os.path.abspath(__file__))
 
+
+def kill_process_by_name(exe_names):
+    """Menutup proses lama secara paksa agar file tidak terkunci saat ditimpa."""
+    if isinstance(exe_names, str):
+        exe_names = [exe_names]
+    for name in exe_names:
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/IM", name, "/T"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=0x08000000
+            )
+        except Exception:
+            pass
+
+def safe_copy_file(src: str, dest: str, related_processes=None, retries: int = 5, delay: float = 0.8) -> bool:
+    """
+    Menyalin file dengan aman ke target.
+    Jika target terkunci oleh proses yang berjalan, tutup proses tersebut,
+    coba teknik rename fallback, dan lakukan retry loop.
+    """
+    if not os.path.exists(src):
+        return False
+
+    os.makedirs(os.path.dirname(os.path.abspath(dest)), exist_ok=True)
+
+    if related_processes:
+        kill_process_by_name(related_processes)
+        time.sleep(0.5)
+
+    for attempt in range(retries):
+        try:
+            shutil.copy2(src, dest)
+            return True
+        except PermissionError:
+            if related_processes:
+                kill_process_by_name(related_processes)
+            time.sleep(delay)
+            try:
+                old_temp = dest + f".old_{int(time.time())}"
+                if os.path.exists(dest):
+                    os.rename(dest, old_temp)
+                    shutil.copy2(src, dest)
+                    try:
+                        os.remove(old_temp)
+                    except Exception:
+                        pass
+                    return True
+            except Exception:
+                pass
+        except Exception:
+            time.sleep(delay)
+
+    shutil.copy2(src, dest)
+    return True
+
 def create_windows_shortcut(target_exe: str, shortcut_path: str, description: str = ""):
     """Membuat file shortcut .lnk di Windows menggunakan WScript.Shell."""
     try:
@@ -322,8 +379,24 @@ class InstallerApp(ctk.CTk):
             return
 
         try:
-            # Salin file ke folder instalasi
-            shutil.copy2(src_exe, target_exe)
+            # Tutup proses lama & salin file ke folder instalasi
+            safe_copy_file(src_exe, target_exe, related_processes=["ServerAdmin.exe", "ClientAgent.exe", app_name])
+
+            # Salin Updater.exe jika tersedia
+            possible_updater = [
+                os.path.join(base_dir, "assets", "Updater.exe"),
+                os.path.join(base_dir, "Updater.exe"),
+                os.path.join(os.path.dirname(base_dir), "assets", "Updater.exe"),
+                os.path.join(os.path.dirname(base_dir), "dist", "assets", "Updater.exe")
+            ]
+            updater_target = os.path.join(install_dir, "Updater.exe")
+            for up in possible_updater:
+                if os.path.exists(up):
+                    try:
+                        safe_copy_file(up, updater_target, related_processes=["Updater.exe"])
+                    except Exception:
+                        pass
+                    break
 
             # Salin Uninstall.exe jika tersedia
             possible_uninst = [
@@ -335,7 +408,7 @@ class InstallerApp(ctk.CTk):
             for up in possible_uninst:
                 if os.path.exists(up):
                     try:
-                        shutil.copy2(up, uninst_target)
+                        safe_copy_file(up, uninst_target, related_processes=["Uninstall.exe"])
                     except Exception:
                         pass
                     break

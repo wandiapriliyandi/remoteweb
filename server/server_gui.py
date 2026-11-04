@@ -901,33 +901,41 @@ class ServerApp(ctk.CTk):
         threading.Thread(target=lambda: self._check_github_update_worker(silent=silent), daemon=True).start()
 
     def _check_github_update_worker(self, silent: bool = False):
-        info = check_github_update()
+        try:
+            info = check_github_update()
+        except Exception as e:
+            info = {"has_update": False, "error": str(e)}
 
         def _update_ui():
-            if not silent:
-                self.btn_check_update.configure(text="🔄 Cek Update", state="normal")
+            try:
+                if not silent and hasattr(self, 'btn_check_update') and self.btn_check_update.winfo_exists():
+                    self.btn_check_update.configure(text="🔄 Cek Update", state="normal")
 
-            if info.get("has_update"):
-                self.latest_release_info = info
-                ver = info.get("latest_version")
-                self.btn_update_banner.configure(text=f"🚀 Update v{ver} Tersedia!")
-                self.btn_update_banner.pack(side="right", padx=(0, 8), pady=12)
-                self._append_log(f"⭐ Versi baru v{ver} tersedia di GitHub Releases!")
+                if info.get("has_update"):
+                    self.latest_release_info = info
+                    ver = info.get("latest_version")
+                    if hasattr(self, 'btn_update_banner') and self.btn_update_banner.winfo_exists():
+                        self.btn_update_banner.configure(text=f"🚀 Update v{ver} Tersedia!")
+                        self.btn_update_banner.pack(side="right", padx=(0, 8), pady=12)
+                    self._append_log(f"⭐ Versi baru v{ver} tersedia di GitHub Releases!")
 
-                if not silent:
-                    self._prompt_server_update()
-            else:
-                self.btn_update_banner.pack_forget()
-                if not silent:
-                    err = info.get("error")
-                    if err:
-                        messagebox.showinfo("Status Update", "Informasi GitHub:\n" + str(err))
-                    else:
-                        self._append_log(f"Pengecekan update selesai ({time.strftime('%H:%M:%S')}): Server sudah menggunakan versi terbaru (v{APP_VERSION}).")
-                        messagebox.showinfo(
-                            "Versi Terbaru",
-                            f"Aplikasi Server sudah menggunakan versi terbaru (v{APP_VERSION})."
-                        )
+                    if not silent:
+                        self._prompt_server_update()
+                else:
+                    if hasattr(self, 'btn_update_banner') and self.btn_update_banner.winfo_exists():
+                        self.btn_update_banner.pack_forget()
+                    if not silent:
+                        err = info.get("error")
+                        if err:
+                            messagebox.showinfo("Status Update", "Informasi GitHub:\n" + str(err))
+                        else:
+                            self._append_log(f"Pengecekan update selesai ({time.strftime('%H:%M:%S')}): Server sudah menggunakan versi terbaru (v{APP_VERSION}).")
+                            messagebox.showinfo(
+                                "Versi Terbaru",
+                                f"Aplikasi Server sudah menggunakan versi terbaru (v{APP_VERSION})."
+                            )
+            except Exception as ui_err:
+                print(f"Error updating UI after check update: {ui_err}")
 
         self.after(0, _update_ui)
 
