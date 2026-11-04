@@ -79,6 +79,14 @@ def main():
 
     args = parser.parse_args()
 
+    # 1. Jalankan Pengujian Otomatis Terlebih Dahulu
+    print("[TEST] Menjalankan pengujian otomatis (run_tests.py)...")
+    test_res = subprocess.run([sys.executable, "run_tests.py"], check=False)
+    if test_res.returncode != 0:
+        print("\n[GAGAL] Pengujian gagal! Batalkan pembaruan versi dan push.")
+        sys.exit(1)
+    print("[TEST] Seluruh pengujian berhasil (PASS)!\n")
+
     current_ver = get_current_version()
 
     if args.set:

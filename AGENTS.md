@@ -10,3 +10,11 @@
   3. AI wajib menginformasikan perubahan nomor versi terbaru kepada pengguna pada rangkuman respon.
   4. Ingatkan pengguna untuk melakukan compile ulang (`python bump_version.py --build` atau `pyinstaller ClientAgent.spec`) jika perubahan terjadi pada Client agar siap disebarkan via tombol Auto-Update Server.
 
+## 2. Pengujian Wajib Sebelum Push (Pre-Push Automated Testing)
+- **AI DILARANG melakukan commit atau push jika belum menjalankan pengujian!**
+- Setiap sebelum melakukan push ke GitHub, AI **WAJIB** menjalankan pengujian otomatis:
+  ```powershell
+  python run_tests.py
+  ```
+- Seluruh 9 skenario pengujian (Sintaks kode, SQLite AppData, Penyimpanan Konfigurasi, Protokol Pesan, Semantic Versioning, dan GitHub Updater) harus berstatus **OK (PASS)**.
+- Jika ada satu saja pengujian yang gagal, batalkan proses komit dan perbaiki kodenya terlebih dahulu.
