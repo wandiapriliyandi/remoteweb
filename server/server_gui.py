@@ -96,7 +96,7 @@ class ServerApp(ctk.CTk):
         title_lbl.pack(side="left", padx=16, pady=12)
 
         local_ip = self.engine.get_local_ip()
-        ip_info = f"ws://{local_ip}:{self.engine.port} (v{APP_VERSION})"
+        ip_info = f"🟢 ws://{local_ip}:{self.engine.port} (v{APP_VERSION})"
         self.lbl_server_info = ctk.CTkLabel(
             header,
             text=ip_info,
