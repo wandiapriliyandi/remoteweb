@@ -25,6 +25,11 @@ from shared.protocol import (
     parse_message
 )
 
+try:
+    from server.history_db import add_history_entry
+except (ImportError, ModuleNotFoundError):
+    from history_db import add_history_entry
+
 class ClientSession:
     """Menyimpan data sesi dan aktivitas live dari PC Client."""
     def __init__(self, websocket: WebSocketServerProtocol, client_id: str, hostname: str, ip: str, version: str = "1.0.0"):
@@ -207,6 +212,22 @@ class RemoteServerEngine:
                         if is_blocked:
                             client_session.violation_count += 1
                             self.log(f"🚨 [BLOKIR] {client_session.hostname} mencoba membuka: '{client_session.current_title[:40]}' -> TAB DITUTUP OTOMATIS!")
+
+                        # Simpan ke riwayat database lokal secara non-blocking di background thread
+                        threading.Thread(
+                            target=add_history_entry,
+                            args=(
+                                client_session.client_id,
+                                client_session.hostname,
+                                client_session.remote_ip,
+                                client_session.current_browser,
+                                client_session.current_title,
+                                client_session.current_url,
+                                is_blocked,
+                                client_session.last_matched_rule
+                            ),
+                            daemon=True
+                        ).start()
 
                         if self.on_clients_changed:
                             self.on_clients_changed()

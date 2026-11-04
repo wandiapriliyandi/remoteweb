@@ -2,13 +2,28 @@
 import os
 import sys
 import tkinter as tk
-from tkinter import messagebox
-import customtkinter as ctk
+from tkinter import messagebox, filedialog
 from typing import List
+import customtkinter as ctk
 
 from shared.protocol import APP_VERSION
 from server.server_core import RemoteServerEngine
 from server.storage import load_blocked_domains, save_blocked_domains
+
+try:
+    from server.history_db import (
+        get_history,
+        get_distinct_hostnames,
+        export_history_to_csv,
+        clear_history
+    )
+except (ImportError, ModuleNotFoundError):
+    from history_db import (
+        get_history,
+        get_distinct_hostnames,
+        export_history_to_csv,
+        clear_history
+    )
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -122,13 +137,19 @@ class ServerApp(ctk.CTk):
         )
         btn_sync.pack(fill="x", padx=12, pady=(0, 12))
 
-        # --- KOLOM KANAN: Live Monitoring Komputer Client ---
-        right_frame = ctk.CTkFrame(main_pane, corner_radius=10)
-        right_frame.pack(side="right", fill="both", expand=True, padx=(8, 0), pady=0)
+        # --- KOLOM KANAN: Multi-Tab (Live Monitoring & Riwayat Aktivitas) ---
+        self.right_tabview = ctk.CTkTabview(main_pane, corner_radius=10, command=self._on_tab_changed)
+        self.right_tabview.pack(side="right", fill="both", expand=True, padx=(8, 0), pady=0)
 
-        # Header client online
-        right_top = ctk.CTkFrame(right_frame, fg_color="transparent")
-        right_top.pack(fill="x", padx=12, pady=(12, 6))
+        # Tab 1: Live Monitoring
+        tab_live = self.right_tabview.add("⚡ Live Monitoring")
+        
+        # Tab 2: Riwayat Browser (History)
+        tab_history = self.right_tabview.add("📜 Riwayat Aktivitas")
+
+        # --- ISI TAB 1: Live Monitoring Komputer Client ---
+        right_top = ctk.CTkFrame(tab_live, fg_color="transparent")
+        right_top.pack(fill="x", padx=6, pady=(4, 6))
 
         self.lbl_client_count = ctk.CTkLabel(
             right_top,
@@ -150,8 +171,90 @@ class ServerApp(ctk.CTk):
         self.btn_update_all.pack(side="right")
 
         # Daftar Client Scrollable (Live Cards)
-        self.scroll_clients = ctk.CTkScrollableFrame(right_frame, label_text="Aktivitas Browser Real-time")
-        self.scroll_clients.pack(fill="both", expand=True, padx=12, pady=6)
+        self.scroll_clients = ctk.CTkScrollableFrame(tab_live, label_text="Aktivitas Browser Real-time")
+        self.scroll_clients.pack(fill="both", expand=True, padx=4, pady=4)
+
+        # --- ISI TAB 2: Riwayat Aktivitas (History) ---
+        filter_bar = ctk.CTkFrame(tab_history, fg_color="#1e293b", corner_radius=8)
+        filter_bar.pack(fill="x", padx=6, pady=(4, 6))
+
+        lbl_f_pc = ctk.CTkLabel(filter_bar, text="PC:", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_f_pc.pack(side="left", padx=(10, 4), pady=8)
+
+        self.opt_filter_pc = ctk.CTkOptionMenu(
+            filter_bar,
+            values=["Semua PC"],
+            width=130,
+            command=lambda _: self._refresh_history_ui()
+        )
+        self.opt_filter_pc.pack(side="left", padx=(0, 8), pady=8)
+
+        lbl_f_st = ctk.CTkLabel(filter_bar, text="Status:", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_f_st.pack(side="left", padx=(4, 4), pady=8)
+
+        self.opt_filter_status = ctk.CTkOptionMenu(
+            filter_bar,
+            values=["Semua Aktivitas", "🚨 Hanya yang Diblokir"],
+            width=165,
+            command=lambda _: self._refresh_history_ui()
+        )
+        self.opt_filter_status.pack(side="left", padx=(0, 8), pady=8)
+
+        self.entry_search_hist = ctk.CTkEntry(
+            filter_bar,
+            placeholder_text="Cari judul web atau URL...",
+            font=ctk.CTkFont(size=12)
+        )
+        self.entry_search_hist.pack(side="left", fill="x", expand=True, padx=(4, 6), pady=8)
+        self.entry_search_hist.bind("<Return>", lambda e: self._refresh_history_ui())
+
+        btn_search = ctk.CTkButton(
+            filter_bar,
+            text="🔍 Cari",
+            width=65,
+            command=self._refresh_history_ui,
+            fg_color="#0284c7",
+            hover_color="#0369a1"
+        )
+        btn_search.pack(side="right", padx=(0, 10), pady=8)
+
+        # Daftar Scrollable Riwayat
+        self.scroll_history = ctk.CTkScrollableFrame(tab_history, label_text="Catatan Riwayat Browser Terkini")
+        self.scroll_history.pack(fill="both", expand=True, padx=4, pady=4)
+
+        # Bilah Aksi Bawah Tab Riwayat
+        action_bar = ctk.CTkFrame(tab_history, fg_color="transparent")
+        action_bar.pack(fill="x", padx=6, pady=(4, 6))
+
+        self.lbl_history_info = ctk.CTkLabel(
+            action_bar,
+            text="Menampilkan 0 riwayat",
+            font=ctk.CTkFont(size=12),
+            text_color="#94a3b8"
+        )
+        self.lbl_history_info.pack(side="left", padx=6)
+
+        btn_clear_hist = ctk.CTkButton(
+            action_bar,
+            text="🗑️ Bersihkan",
+            width=90,
+            height=28,
+            fg_color="#ef4444",
+            hover_color="#dc2626",
+            command=self._clear_history_action
+        )
+        btn_clear_hist.pack(side="right", padx=(6, 0))
+
+        btn_export = ctk.CTkButton(
+            action_bar,
+            text="📥 Ekspor ke CSV / Excel",
+            width=165,
+            height=28,
+            fg_color="#10b981",
+            hover_color="#059669",
+            command=self._export_history_action
+        )
+        btn_export.pack(side="right", padx=6)
 
         # 3. Log Box Bawah
         log_frame = ctk.CTkFrame(self, corner_radius=10, height=130)
@@ -414,6 +517,186 @@ class ServerApp(ctk.CTk):
                 command=lambda c=cid: self.engine.send_force_close_to_client(c, mode="window")
             )
             btn_force_win.pack(side="right")
+
+    def _on_tab_changed(self):
+        """Dipanggil ketika pengguna beralih tab."""
+        if self.right_tabview.get() == "📜 Riwayat Aktivitas":
+            self._update_hostname_dropdown()
+            self._refresh_history_ui()
+
+    def _update_hostname_dropdown(self):
+        """Memperbarui daftar opsi dropdown PC berdasarkan data riwayat."""
+        current_val = self.opt_filter_pc.get()
+        hostnames = get_distinct_hostnames()
+        for c in self.engine.clients.values():
+            if c.hostname and c.hostname not in hostnames:
+                hostnames.append(c.hostname)
+        hostnames = sorted(list(set(hostnames)))
+        options = ["Semua PC"] + [h for h in hostnames if h]
+        self.opt_filter_pc.configure(values=options)
+        if current_val in options:
+            self.opt_filter_pc.set(current_val)
+        else:
+            self.opt_filter_pc.set("Semua PC")
+
+    def _refresh_history_ui(self):
+        """Memperbarui daftar riwayat di Tab Riwayat."""
+        for widget in self.scroll_history.winfo_children():
+            widget.destroy()
+
+        selected_pc = self.opt_filter_pc.get()
+        selected_cat = self.opt_filter_status.get()
+        search_q = self.entry_search_hist.get().strip()
+
+        is_blocked_only = (selected_cat == "🚨 Hanya yang Diblokir")
+        records = get_history(
+            hostname=selected_pc if selected_pc != "Semua PC" else None,
+            is_blocked_only=is_blocked_only,
+            search_query=search_q if search_q else None,
+            limit=250
+        )
+
+        self.lbl_history_info.configure(text=f"Menampilkan {len(records)} riwayat terbaru")
+
+        if not records:
+            empty_lbl = ctk.CTkLabel(
+                self.scroll_history,
+                text="Belum ada riwayat aktivitas yang tercatat sesuai filter.",
+                text_color="#94a3b8",
+                font=ctk.CTkFont(size=13, slant="italic")
+            )
+            empty_lbl.pack(pady=40)
+            return
+
+        for r in records:
+            card = ctk.CTkFrame(self.scroll_history, fg_color="#1e293b", corner_radius=8)
+            card.pack(fill="x", pady=3, padx=2)
+
+            # Baris 1: Waktu, Hostname, Browser, Lencana Status
+            header_row = ctk.CTkFrame(card, fg_color="transparent")
+            header_row.pack(fill="x", padx=10, pady=(6, 2))
+
+            time_lbl = ctk.CTkLabel(
+                header_row,
+                text=r["timestamp"],
+                font=ctk.CTkFont(family="Consolas", size=11),
+                text_color="#94a3b8"
+            )
+            time_lbl.pack(side="left")
+
+            host_badge = ctk.CTkLabel(
+                header_row,
+                text=f"🖥️ {r['hostname']}",
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color="#38bdf8",
+                fg_color="#0f172a",
+                corner_radius=4,
+                padx=6,
+                pady=1
+            )
+            host_badge.pack(side="left", padx=8)
+
+            browser_lbl = ctk.CTkLabel(
+                header_row,
+                text=f"🌐 {r['browser']}",
+                font=ctk.CTkFont(size=11),
+                text_color="#cbd5e1"
+            )
+            browser_lbl.pack(side="left")
+
+            if r["is_blocked"]:
+                status_text = f"🚨 DIBLOKIR: {r['matched_rule']}" if r["matched_rule"] else "🚨 DIBLOKIR"
+                status_badge = ctk.CTkLabel(
+                    header_row,
+                    text=status_text,
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    text_color="#fecaca",
+                    fg_color="#991b1b",
+                    corner_radius=4,
+                    padx=8,
+                    pady=2
+                )
+                status_badge.pack(side="right")
+            else:
+                status_badge = ctk.CTkLabel(
+                    header_row,
+                    text="✓ Normal",
+                    font=ctk.CTkFont(size=11),
+                    text_color="#86efac",
+                    fg_color="#14532d",
+                    corner_radius=4,
+                    padx=6,
+                    pady=2
+                )
+                status_badge.pack(side="right")
+
+            # Baris 2: Judul Tab / Halaman
+            title_text = r["title"] if r["title"] else "(Tanpa Judul)"
+            title_lbl = ctk.CTkLabel(
+                card,
+                text=title_text,
+                font=ctk.CTkFont(size=13, weight="bold"),
+                text_color="#ffffff",
+                anchor="w",
+                justify="left"
+            )
+            title_lbl.pack(fill="x", padx=10, pady=(0, 2))
+
+            # Baris 3: URL / Link
+            if r["url_snippet"]:
+                url_lbl = ctk.CTkLabel(
+                    card,
+                    text=f"🔗 {r['url_snippet']}",
+                    font=ctk.CTkFont(size=11),
+                    text_color="#67e8f9",
+                    anchor="w",
+                    justify="left"
+                )
+                url_lbl.pack(fill="x", padx=10, pady=(0, 6))
+
+    def _export_history_action(self):
+        """Mengekspor seluruh riwayat yang sesuai kriteria filter ke file CSV/Excel."""
+        selected_pc = self.opt_filter_pc.get()
+        selected_cat = self.opt_filter_status.get()
+        search_q = self.entry_search_hist.get().strip()
+
+        is_blocked_only = (selected_cat == "🚨 Hanya yang Diblokir")
+        from datetime import datetime
+        default_filename = f"Riwayat_Browser_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("Berkas CSV (*.csv)", "*.csv"), ("Semua Berkas (*.*)", "*.*")],
+            initialfile=default_filename,
+            title="Simpan Laporan Riwayat Aktivitas Browser"
+        )
+        if not filepath:
+            return
+
+        try:
+            count = export_history_to_csv(
+                filepath,
+                hostname=selected_pc if selected_pc != "Semua PC" else None,
+                is_blocked_only=is_blocked_only,
+                search_query=search_q if search_q else None
+            )
+            messagebox.showinfo(
+                "Ekspor Berhasil",
+                f"Sebanyak {count} catatan riwayat aktivitas berhasil diekspor ke:\n{filepath}"
+            )
+            self._append_log(f"Laporan riwayat ({count} entri) diekspor ke CSV: {os.path.basename(filepath)}")
+        except Exception as e:
+            messagebox.showerror("Gagal Ekspor", f"Terjadi kesalahan saat mengekspor: {e}")
+
+    def _clear_history_action(self):
+        """Membersihkan basis data riwayat browser."""
+        if messagebox.askyesno(
+            "Konfirmasi Hapus Riwayat",
+            "Apakah Anda yakin ingin menghapus seluruh riwayat aktivitas browser yang tersimpan di database?\n\nTindakan ini tidak dapat dibatalkan."
+        ):
+            count = clear_history()
+            self._refresh_history_ui()
+            messagebox.showinfo("Riwayat Dibersihkan", f"Database berhasil dibersihkan ({count} catatan dihapus).")
+            self._append_log("Seluruh riwayat aktivitas browser di database telah dibersihkan oleh Admin.")
 
     def _append_log_threadsafe(self, message: str):
         self.after(0, lambda: self._append_log(message))
