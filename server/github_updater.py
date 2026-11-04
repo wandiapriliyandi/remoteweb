@@ -69,15 +69,29 @@ def check_github_update() -> Dict[str, Any]:
         result["release_notes"] = data.get("body", "")
         result["html_url"] = data.get("html_url", result["html_url"])
 
-        # Cari file asset yang cocok di release
+        # Cari file asset yang cocok di release (utamakan nama persis)
         assets = data.get("assets", [])
         for asset in assets:
             name = asset.get("name", "").lower()
             url = asset.get("browser_download_url")
-            if "serveradmin" in name or "server" in name:
+            if name == "serveradmin.exe":
                 result["server_asset_url"] = url
-            elif "clientagent" in name or "client" in name:
+            elif name == "clientagent.exe":
                 result["client_asset_url"] = url
+
+        # Fallback jika nama persis tidak ditemukan
+        if not result["server_asset_url"]:
+            for asset in assets:
+                name = asset.get("name", "").lower()
+                if "serveradmin" in name and name.endswith(".exe"):
+                    result["server_asset_url"] = asset.get("browser_download_url")
+                    break
+        if not result["client_asset_url"]:
+            for asset in assets:
+                name = asset.get("name", "").lower()
+                if "clientagent" in name and name.endswith(".exe"):
+                    result["client_asset_url"] = asset.get("browser_download_url")
+                    break
 
         if is_newer_version(tag_name, APP_VERSION):
             result["has_update"] = True
@@ -141,25 +155,43 @@ def run_server_detached_updater_batch(new_exe_path: str, target_exe_path: str) -
     temp_dir = os.environ.get("TEMP", os.path.expanduser("~\\AppData\\Local\\Temp"))
     bat_path = os.path.join(temp_dir, f"update_server_{int(time.time())}.bat")
     current_pid = os.getpid()
+    target_dir = os.path.dirname(os.path.abspath(target_exe_path))
 
     bat_content = f"""@echo off
 setlocal enabledelayedexpansion
 
-:: 1. Jeda agar aplikasi server berhenti sepenuhnya
+:: 1. Hapus variabel lingkungan PyInstaller agar executable baru tidak mewarisi cache MEIPASS lama
+set _MEIPASS2=
+set _MEIPASS=
+
+:: 2. Jeda agar aplikasi server berhenti sepenuhnya
 timeout /t 2 /nobreak > nul
 
-:: 2. Matikan proses lama jika masih aktif
+:: 3. Matikan proses lama (PID dan nama proses) untuk melepaskan file lock
 taskkill /F /PID {current_pid} > nul 2>&1
+taskkill /F /IM ServerAdmin.exe > nul 2>&1
 
-:: 3. Salin file exe baru menimpa file lama
-copy /y "{new_exe_path}" "{target_exe_path}" > nul 2>&1
-if not errorlevel 1 (
-    del "{new_exe_path}" > nul 2>&1
-    :: 4. Jalankan kembali Server Admin baru
-    start "" "{target_exe_path}"
+:: 4. Loop menimpa file lama dengan file baru (hingga 10 kali retry jika file masih terkunci)
+set SUCCESS=0
+for /L %%i in (1,1,10) do (
+    if !SUCCESS! equ 0 (
+        copy /y "{new_exe_path}" "{target_exe_path}" > nul 2>&1
+        if not errorlevel 1 (
+            set SUCCESS=1
+        ) else (
+            timeout /t 1 /nobreak > nul
+        )
+    )
 )
 
-:: 5. Bersihkan script batch
+if !SUCCESS! equ 1 (
+    del "{new_exe_path}" > nul 2>&1
+    :: 5. Jalankan kembali Server Admin baru dengan direktori kerja yang tepat
+    cd /d "{target_dir}"
+    start "" /D "{target_dir}" "{target_exe_path}"
+)
+
+:: 6. Bersihkan script batch
 del "%~f0" > nul 2>&1
 """
 
@@ -171,10 +203,16 @@ del "%~f0" > nul 2>&1
         CREATE_NO_WINDOW = 0x08000000
         flags = DETACHED_PROCESS | CREATE_NO_WINDOW
 
+        # Bersihkan _MEIPASS2 dari env child process
+        clean_env = os.environ.copy()
+        clean_env.pop("_MEIPASS2", None)
+        clean_env.pop("_MEIPASS", None)
+
         subprocess.Popen(
             ["cmd.exe", "/c", bat_path],
             creationflags=flags,
-            close_fds=True
+            close_fds=True,
+            env=clean_env
         )
         return True
     except Exception as e:

@@ -4,7 +4,7 @@ import uuid
 from typing import Any, Dict, List
 
 # Versi Aplikasi Saat Ini
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 
 # Tipe Pesan Protokol
 TYPE_REGISTER = "REGISTER"                    # Client mendaftar dengan info hostname, IP, dan OS

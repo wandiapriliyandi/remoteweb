@@ -70,26 +70,44 @@ def run_detached_updater_batch(new_exe_path: str, target_exe_path: str) -> bool:
     temp_dir = os.environ.get("TEMP", os.path.expanduser("~\\AppData\\Local\\Temp"))
     bat_path = os.path.join(temp_dir, f"update_client_{int(time.time())}.bat")
     current_pid = os.getpid()
+    target_dir = os.path.dirname(os.path.abspath(target_exe_path))
 
     # Buat script batch pengganti executable
     bat_content = f"""@echo off
 setlocal enabledelayedexpansion
 
-:: 1. Berikan jeda agar proses lama berhenti sepenuhnya
+:: 1. Hapus variabel lingkungan PyInstaller agar executable baru tidak mewarisi cache MEIPASS lama
+set _MEIPASS2=
+set _MEIPASS=
+
+:: 2. Berikan jeda agar proses lama berhenti sepenuhnya
 timeout /t 2 /nobreak > nul
 
-:: 2. Pastikan proses lama mati
+:: 3. Pastikan proses lama mati untuk melepaskan file lock
 taskkill /F /PID {current_pid} > nul 2>&1
+taskkill /F /IM ClientAgent.exe > nul 2>&1
 
-:: 3. Timpa file lama dengan file baru
-copy /y "{new_exe_path}" "{target_exe_path}" > nul 2>&1
-if not errorlevel 1 (
-    del "{new_exe_path}" > nul 2>&1
-    :: 4. Jalankan kembali aplikasi client langsung ke System Tray
-    start "" "{target_exe_path}" --minimized
+:: 4. Loop menimpa file lama dengan file baru (hingga 10 kali retry jika file masih terkunci)
+set SUCCESS=0
+for /L %%i in (1,1,10) do (
+    if !SUCCESS! equ 0 (
+        copy /y "{new_exe_path}" "{target_exe_path}" > nul 2>&1
+        if not errorlevel 1 (
+            set SUCCESS=1
+        ) else (
+            timeout /t 1 /nobreak > nul
+        )
+    )
 )
 
-:: 5. Hapus script batch ini
+if !SUCCESS! equ 1 (
+    del "{new_exe_path}" > nul 2>&1
+    :: 5. Jalankan kembali aplikasi client langsung ke System Tray dengan direktori kerja yang tepat
+    cd /d "{target_dir}"
+    start "" /D "{target_dir}" "{target_exe_path}" --minimized
+)
+
+:: 6. Hapus script batch ini
 del "%~f0" > nul 2>&1
 """
 
@@ -102,10 +120,16 @@ del "%~f0" > nul 2>&1
         CREATE_NO_WINDOW = 0x08000000
         flags = DETACHED_PROCESS | CREATE_NO_WINDOW
 
+        # Bersihkan _MEIPASS2 dari env child process
+        clean_env = os.environ.copy()
+        clean_env.pop("_MEIPASS2", None)
+        clean_env.pop("_MEIPASS", None)
+
         subprocess.Popen(
             ["cmd.exe", "/c", bat_path],
             creationflags=flags,
-            close_fds=True
+            close_fds=True,
+            env=clean_env
         )
         return True
     except Exception as e:
