@@ -19,13 +19,32 @@ from client.autostart import (
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
+def get_asset_path(filename: str) -> str:
+    """Mendapatkan path absolut ke file aset, kompatibel dengan PyInstaller."""
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        p = os.path.join(sys._MEIPASS, "assets", filename)
+        if os.path.exists(p):
+            return p
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    p = os.path.join(base_dir, "assets", filename)
+    if os.path.exists(p):
+        return p
+    return ""
+
 def create_tray_icon_image():
-    """Membuat ikon perisai untuk System Tray."""
+    """Membuat atau memuat ikon perisai untuk System Tray."""
+    ico_path = get_asset_path("icon.ico")
+    png_path = get_asset_path("logo.png")
+    for p in (png_path, ico_path):
+        if p and os.path.exists(p):
+            try:
+                return Image.open(p).convert("RGBA").resize((64, 64), Image.Resampling.LANCZOS)
+            except Exception:
+                pass
+
     img = Image.new("RGBA", (64, 64), color=(0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    # Gambar lingkaran biru dengan perisai
     draw.ellipse([2, 2, 62, 62], fill="#0284c7", outline="#38bdf8", width=3)
-    # Gambar huruf M atau simbol pengawasan putih di tengah
     draw.polygon([(32, 14), (48, 22), (48, 40), (32, 50), (16, 40), (16, 22)], fill="#ffffff")
     return img
 
@@ -36,6 +55,13 @@ class ClientApp(ctk.CTk):
         self.title("Client Agent - Remote Web Monitor & Filter")
         self.geometry("640x520")
         self.minsize(560, 460)
+
+        ico_file = get_asset_path('icon.ico')
+        if ico_file and os.path.exists(ico_file):
+            try:
+                self.iconbitmap(ico_file)
+            except Exception:
+                pass
 
         self._is_in_tray = start_minimized
 

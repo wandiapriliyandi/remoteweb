@@ -26,6 +26,21 @@ except (ImportError, ModuleNotFoundError):
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
+def get_installer_asset_path(filename: str) -> str:
+    """Mendapatkan path aset icon untuk installer."""
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        p = os.path.join(sys._MEIPASS, "assets", filename)
+        if os.path.exists(p):
+            return p
+    cur_dir = os.path.dirname(os.path.abspath(__file__))
+    par_dir = os.path.dirname(cur_dir)
+    for base in (cur_dir, par_dir):
+        p = os.path.join(base, "assets", filename)
+        if os.path.exists(p):
+            return p
+    return ""
+
+
 def get_base_dir():
     """Mendapatkan direktori tempat resource/exe berada."""
     if getattr(sys, 'frozen', False):
@@ -93,6 +108,13 @@ class InstallerApp(ctk.CTk):
         self.title("Setup Wizard - Remote PC Web Monitor & Filter")
         self.geometry("580x480")
         self.resizable(False, False)
+
+        ico_file = get_installer_asset_path('icon.ico')
+        if ico_file and os.path.exists(ico_file):
+            try:
+                self.iconbitmap(ico_file)
+            except Exception:
+                pass
 
         self.install_role = ctk.StringVar(value="client")
         self.auto_start_var = ctk.BooleanVar(value=True)
