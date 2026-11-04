@@ -112,14 +112,15 @@ class RemoteServerEngine:
     def find_client_exe_path() -> Optional[str]:
         """Menemukan lokasi file ClientAgent.exe di server."""
         base_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        candidates = [
-            os.path.join(base_dir, "dist", "ClientAgent.exe"),
-            os.path.join(base_dir, "ClientAgent.exe"),
-            os.path.join(os.environ.get("LOCALAPPDATA", ""), "RemotePCWebMonitor", "ClientAgent.exe")
-        ]
-        for p in candidates:
-            if os.path.exists(p):
-                return p
+        import glob
+        for d in [os.path.join(base_dir, "dist"), base_dir, os.path.join(os.environ.get("LOCALAPPDATA", ""), "RemotePCWebMonitor")]:
+            if os.path.exists(d):
+                direct = os.path.join(d, "ClientAgent.exe")
+                if os.path.exists(direct):
+                    return direct
+                m = glob.glob(os.path.join(d, "ClientAgent*.exe"))
+                if m:
+                    return m[0]
         return None
 
     @staticmethod

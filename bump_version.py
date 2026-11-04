@@ -98,7 +98,12 @@ def main():
         spec_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ClientAgent.spec")
         result = subprocess.run(["pyinstaller", spec_path], check=False)
         if result.returncode == 0:
-            print(f"[BUILD SUKSES] File dist/ClientAgent.exe berhasil dikompilasi ke versi v{new_ver}!")
+            import shutil
+            dist_exe = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist", "ClientAgent.exe")
+            ver_exe = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist", f"ClientAgent_v{new_ver}.exe")
+            if os.path.exists(dist_exe):
+                shutil.copy2(dist_exe, ver_exe)
+            print(f"[BUILD SUKSES] File dist/ClientAgent.exe dan dist/ClientAgent_v{new_ver}.exe berhasil dibuat!")
         else:
             print("[BUILD GAGAL] Terjadi kesalahan saat menjalankan PyInstaller.")
 

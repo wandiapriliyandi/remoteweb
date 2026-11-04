@@ -42,6 +42,13 @@ jobs:
       - name: Build Setup_RemoteMonitor.exe
         run: pyinstaller Setup_RemoteMonitor.spec
 
+      - name: Create Versioned Copies
+        shell: pwsh
+        run: |
+          Copy-Item "dist/Setup_RemoteMonitor.exe" "dist/Setup_RemoteMonitor_${{ github.ref_name }}.exe"
+          Copy-Item "dist/ServerAdmin.exe" "dist/ServerAdmin_${{ github.ref_name }}.exe"
+          Copy-Item "dist/ClientAgent.exe" "dist/ClientAgent_${{ github.ref_name }}.exe"
+
       - name: Create GitHub Release and Upload Assets
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
@@ -51,9 +58,12 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
+            dist/Setup_RemoteMonitor_${{ github.ref_name }}.exe
+            dist/ServerAdmin_${{ github.ref_name }}.exe
+            dist/ClientAgent_${{ github.ref_name }}.exe
+            dist/Setup_RemoteMonitor.exe
             dist/ServerAdmin.exe
             dist/ClientAgent.exe
-            dist/Setup_RemoteMonitor.exe
             dist/Uninstall.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
