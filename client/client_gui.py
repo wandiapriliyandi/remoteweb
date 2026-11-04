@@ -8,6 +8,8 @@ import customtkinter as ctk
 from PIL import Image, ImageDraw
 import pystray
 
+import shutil
+from shared.protocol import APP_VERSION
 from client.client_core import ClientEngine
 from client.autostart import (
     is_autostart_enabled,
@@ -30,6 +32,24 @@ def get_asset_path(filename: str) -> str:
     if os.path.exists(p):
         return p
     return ""
+
+def cleanup_old_runtimes():
+    """Membersihkan folder cache _MEI lama di AppData runtime agar hemat ruang disk."""
+    try:
+        local_app = os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local"))
+        rt_dir = os.path.join(local_app, "RemotePCWebMonitor", "runtime")
+        if not os.path.exists(rt_dir):
+            return
+        current_mei = os.path.abspath(getattr(sys, "_MEIPASS", ""))
+        for item in os.listdir(rt_dir):
+            full_path = os.path.abspath(os.path.join(rt_dir, item))
+            if item.startswith("_MEI") and os.path.isdir(full_path) and full_path != current_mei:
+                try:
+                    shutil.rmtree(full_path, ignore_errors=True)
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 def create_tray_icon_image():
     """Membuat atau memuat ikon perisai untuk System Tray."""
@@ -127,6 +147,19 @@ class ClientApp(ctk.CTk):
             text_color="#38bdf8"
         )
         title_lbl.pack(side="left")
+
+        # Badge Versi Aktif
+        lbl_ver = ctk.CTkLabel(
+            title_box,
+            text=f"v{APP_VERSION}",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#38bdf8",
+            fg_color="#0f172a",
+            corner_radius=6,
+            padx=6,
+            pady=2
+        )
+        lbl_ver.pack(side="left", padx=8)
 
         self.lbl_status = ctk.CTkLabel(
             header,

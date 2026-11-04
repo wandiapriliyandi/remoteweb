@@ -1,6 +1,7 @@
 """GUI Server Admin: Pemantau Browser & Filter Web Real-time dengan Kontrol Auto-Update."""
 import os
 import sys
+import shutil
 import tkinter as tk
 from tkinter import messagebox, filedialog
 import threading
@@ -983,6 +984,24 @@ class ServerApp(ctk.CTk):
             pass
         super().destroy()
         os._exit(0)
+
+def cleanup_old_runtimes():
+    """Membersihkan folder cache _MEI lama di AppData runtime agar hemat ruang disk."""
+    try:
+        local_app = os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local"))
+        rt_dir = os.path.join(local_app, "RemotePCWebMonitor", "runtime")
+        if not os.path.exists(rt_dir):
+            return
+        current_mei = os.path.abspath(getattr(sys, "_MEIPASS", ""))
+        for item in os.listdir(rt_dir):
+            full_path = os.path.abspath(os.path.join(rt_dir, item))
+            if item.startswith("_MEI") and os.path.isdir(full_path) and full_path != current_mei:
+                try:
+                    shutil.rmtree(full_path, ignore_errors=True)
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 def run_server_gui():
     app = ServerApp()
