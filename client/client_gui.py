@@ -59,6 +59,8 @@ class ClientApp(ctk.CTk):
         ico_file = get_asset_path('icon.ico')
         if ico_file and os.path.exists(ico_file):
             try:
+                self.iconbitmap(default=ico_file)
+            except Exception:
                 self.iconbitmap(ico_file)
             except Exception:
                 pass
@@ -104,13 +106,27 @@ class ClientApp(ctk.CTk):
         header = ctk.CTkFrame(self, corner_radius=10, fg_color="#1e293b")
         header.pack(fill="x", padx=16, pady=(16, 10))
 
+        # Logo Visual & Judul
+        title_box = ctk.CTkFrame(header, fg_color="transparent")
+        title_box.pack(side="left", padx=16, pady=8)
+
+        logo_file = get_asset_path("logo.png")
+        if logo_file and os.path.exists(logo_file):
+            try:
+                pil_logo = Image.open(logo_file).convert("RGBA")
+                self.header_logo = ctk.CTkImage(light_image=pil_logo, dark_image=pil_logo, size=(36, 36))
+                lbl_icon = ctk.CTkLabel(title_box, image=self.header_logo, text="")
+                lbl_icon.pack(side="left", padx=(0, 10))
+            except Exception:
+                pass
+
         title_lbl = ctk.CTkLabel(
-            header,
-            text="👁️ WEB MONITOR CLIENT AGENT",
+            title_box,
+            text="WEB MONITOR CLIENT AGENT",
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color="#38bdf8"
         )
-        title_lbl.pack(side="left", padx=16, pady=12)
+        title_lbl.pack(side="left")
 
         self.lbl_status = ctk.CTkLabel(
             header,

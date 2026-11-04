@@ -7,6 +7,7 @@ import uuid
 import winreg
 import subprocess
 import customtkinter as ctk
+from PIL import Image
 from tkinter import messagebox
 
 try:
@@ -113,6 +114,8 @@ class ClientInstallerApp(ctk.CTk):
         ico_file = get_installer_asset_path('icon.ico')
         if ico_file and os.path.exists(ico_file):
             try:
+                self.iconbitmap(default=ico_file)
+            except Exception:
                 self.iconbitmap(ico_file)
             except Exception:
                 pass
@@ -132,13 +135,29 @@ class ClientInstallerApp(ctk.CTk):
         header.pack(fill="x")
         header.pack_propagate(False)
 
+        banner_box = ctk.CTkFrame(header, fg_color="transparent")
+        banner_box.pack(anchor="w", padx=24, pady=(12, 2))
+
+        logo_file = get_installer_asset_path("logo.png")
+        if logo_file and os.path.exists(logo_file):
+            try:
+                pil_logo = Image.open(logo_file).convert("RGBA")
+                self.header_logo = ctk.CTkImage(light_image=pil_logo, dark_image=pil_logo, size=(46, 46))
+                lbl_icon = ctk.CTkLabel(banner_box, image=self.header_logo, text="")
+                lbl_icon.pack(side="left", padx=(0, 12))
+            except Exception:
+                pass
+
+        text_col = ctk.CTkFrame(banner_box, fg_color="transparent")
+        text_col.pack(side="left")
+
         title = ctk.CTkLabel(
-            header,
-            text="🛡️ Pasang Client Agent (PC Target)",
+            text_col,
+            text="Pasang Client Agent (PC Target)",
             font=ctk.CTkFont(size=20, weight="bold"),
             text_color="#38bdf8"
         )
-        title.pack(anchor="w", padx=24, pady=(16, 2))
+        title.pack(anchor="w")
 
         sub_title = ctk.CTkLabel(
             header,

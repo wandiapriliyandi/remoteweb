@@ -6,6 +6,7 @@ from tkinter import messagebox, filedialog
 import threading
 from typing import List, Optional, Dict, Any
 import customtkinter as ctk
+from PIL import Image
 
 from shared.protocol import APP_VERSION
 from server.server_core import RemoteServerEngine
@@ -58,6 +59,8 @@ class ServerApp(ctk.CTk):
         ico_file = get_asset_path('icon.ico')
         if ico_file and os.path.exists(ico_file):
             try:
+                self.iconbitmap(default=ico_file)
+            except Exception:
                 self.iconbitmap(ico_file)
             except Exception:
                 pass

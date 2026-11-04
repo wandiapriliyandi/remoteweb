@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('dist/ServerAdmin.exe', '.'), ('dist/ClientAgent.exe', '.'), ('dist/Uninstall.exe', '.')]
+datas = [('assets', 'assets'), ('dist/ServerAdmin.exe', '.'), ('dist/ClientAgent.exe', '.'), ('dist/Uninstall.exe', '.')]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('customtkinter')
@@ -30,6 +30,7 @@ exe = EXE(
     a.datas,
     [],
     name='Setup_RemoteMonitor',
+    icon='assets/icon.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
