@@ -41,7 +41,7 @@ def register_startup(exe_path: str, app_name: str = "RemotePCWebMonitorClient"):
     try:
         reg_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_SET_VALUE)
-        winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, f'"{exe_path}"')
+        winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, f'"{exe_path}" --minimized')
         winreg.CloseKey(key)
         return True
     except Exception as e:

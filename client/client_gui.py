@@ -9,7 +9,12 @@ from PIL import Image, ImageDraw
 import pystray
 
 from client.client_core import ClientEngine
-from client.autostart import is_autostart_enabled, enable_autostart, disable_autostart
+from client.autostart import (
+    is_autostart_enabled,
+    enable_autostart,
+    disable_autostart,
+    sync_autostart_command
+)
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -25,12 +30,18 @@ def create_tray_icon_image():
     return img
 
 class ClientApp(ctk.CTk):
-    def __init__(self):
+    def __init__(self, start_minimized: bool = False):
         super().__init__()
 
         self.title("Client Agent - Remote Web Monitor & Filter")
         self.geometry("640x520")
         self.minsize(560, 460)
+
+        self._is_in_tray = start_minimized
+
+        # Jika diminta start_minimized (misal saat boot komputer), sembunyikan jendela sebelum digambar
+        if start_minimized:
+            self.withdraw()
 
         self.engine = ClientEngine()
         self.engine.on_log = self._append_log_threadsafe
@@ -39,7 +50,6 @@ class ClientApp(ctk.CTk):
 
         # System tray setup
         self.tray_icon = None
-        self._is_in_tray = False
 
         self._build_ui()
 
@@ -52,8 +62,16 @@ class ClientApp(ctk.CTk):
         # Inisialisasi System Tray Icon di latar belakang
         self._setup_tray()
 
-        # Jalankan engine client
+        # Sinkronisasi registry auto-start jika sebelumnya terdaftar tanpa argumen --minimized
+        sync_autostart_command()
+
+        # Jalankan engine client (pemantauan browser & komunikasi WebSocket)
         self.engine.start()
+
+        if start_minimized:
+            # Pastikan tetap withdraw setelah build UI selesai
+            self.withdraw()
+            self._append_log("Aplikasi berjalan di latar belakang (System Tray).")
 
     def _build_ui(self):
         # 1. Header
@@ -120,6 +138,14 @@ class ClientApp(ctk.CTk):
         )
         self.switch_autostart.pack(side="left")
 
+        lbl_hint = ctk.CTkLabel(
+            row2,
+            text="(Otomatis langsung ke System Tray saat komputer baru nyala)",
+            font=ctk.CTkFont(size=11),
+            text_color="#94a3b8"
+        )
+        lbl_hint.pack(side="left", padx=8)
+
         if is_autostart_enabled():
             self.switch_autostart.select()
         else:
@@ -176,7 +202,7 @@ class ClientApp(ctk.CTk):
         btn_minimize.pack(side="right")
 
     def _setup_tray(self):
-        """Menyiapkan ikon System Tray di Windows taskbar (pojok kanan bawah)."""
+        """Menyiapkan ikon System Tray di Windows taskbar (pojok kanan bawah dekat jam)."""
         image = create_tray_icon_image()
         menu = pystray.Menu(
             pystray.MenuItem("Buka Aplikasi", self._show_from_tray, default=True),
@@ -189,6 +215,8 @@ class ClientApp(ctk.CTk):
 
     def _on_minimize_to_tray(self, event=None):
         """Dipicu saat tombol minimize (_) ditekan di pojok kanan atas jendela."""
+        if event is not None and event.widget != self:
+            return
         if self.state() == "iconic" and not self._is_in_tray:
             self._is_in_tray = True
             # Berikan sedikit jeda sebelum withdraw agar animasi Windows selesai
@@ -212,7 +240,10 @@ class ClientApp(ctk.CTk):
         self._is_in_tray = False
         self.deiconify()
         self.state("normal")
+        self.lift()
         self.focus_force()
+        self.attributes('-topmost', True)
+        self.after(100, lambda: self.attributes('-topmost', False))
 
     def _exit_from_tray(self, icon=None, item=None):
         """Keluar sepenuhnya dari menu klik kanan System Tray."""
@@ -246,7 +277,7 @@ class ClientApp(ctk.CTk):
     def _toggle_autostart(self):
         if self.switch_autostart.get():
             if enable_autostart():
-                self._append_log("Auto-start Windows AKTIF (Akan otomatis berjalan saat PC boot).")
+                self._append_log("Auto-start Windows AKTIF (Otomatis berjalan di System Tray saat PC boot).")
             else:
                 self.switch_autostart.deselect()
                 messagebox.showerror("Gagal", "Gagal mengaktifkan auto-start di registry Windows.")
@@ -290,7 +321,11 @@ class ClientApp(ctk.CTk):
         self.txt_log.see("end")
 
 def run_client_gui():
-    app = ClientApp()
+    args = [a.lower() for a in sys.argv[1:]]
+    minimized_flags = {"--minimized", "-minimized", "/minimized", "--tray", "-tray", "--hidden", "-hidden", "-m"}
+    start_minimized = any(flag in args for flag in minimized_flags)
+
+    app = ClientApp(start_minimized=start_minimized)
     app.mainloop()
 
 if __name__ == "__main__":

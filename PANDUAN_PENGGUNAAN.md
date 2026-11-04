@@ -11,7 +11,7 @@ Aplikasi ini terdiri dari dua program desktop berbasis Python:
 - **Tanpa Perlu Hak Akses Administrator (UAC)**: Dapat langsung berjalan lancar sebagai pengguna biasa.
 - **Live Monitor**: Admin server bisa melihat langsung situs apa yang sedang dibuka oleh client.
 - **Deteksi Cepat**: Jika pengguna membuka kata kunci atau domain terlarang (misal: YouTube, Facebook, judi, game), tab browser langsung ditutup secara instan dalam hitungan milidetik.
-- **Auto-Startup Windows**: Terdapat tombol sakelar untuk mengaktifkan agar program langsung aktif saat komputer dinyalakan.
+- **Auto-Startup Windows (Silent Tray)**: Otomatis berjalan dan terminimalkan langsung ke System Tray saat komputer baru dinyalakan tanpa memunculkan jendela, tanpa mengurangi performa.
 
 ---
 
@@ -21,7 +21,7 @@ Tersedia file master installer terpadu di dalam folder `dist/`:
 - **`dist/Setup_RemoteMonitor.exe`**: Master Installer Wizard serba guna.
   - Cukup jalankan file ini di komputer manapun.
   - Terdapat pilihan:
-    - 🔘 **PC Client (Komputer Target yang Diawasi)**: Otomatis memasang ke komputer, membuat shortcut Desktop, dan mendaftarkan ke Windows Startup agar aktif saat PC dinyalakan.
+    - 🔘 **PC Client (Komputer Target yang Diawasi)**: Otomatis memasang ke komputer, membuat shortcut Desktop, dan mendaftarkan ke Windows Startup agar aktif di System Tray saat PC dinyalakan.
     - 🔘 **PC Server (Komputer Admin Pemantau)**: Otomatis memasang dashboard Server Admin dan membuat shortcut Desktop.
 
 ---
@@ -48,7 +48,8 @@ Tersedia file master installer terpadu di dalam folder `dist/`:
 4. Klik **"Terapkan IP"**.
 5. Status di sudut kanan atas akan berubah menjadi **"● Terhubung ke Server"**.
 6. Aktifkan sakelar **"Jalankan otomatis saat PC dinyalakan (Run on Startup Windows)"**.
-7. Klik tombol **"Sembunyikan Jendela (Jalan di Latar Belakang)"** agar aplikasi bekerja tanpa mengganggu pengguna target.
+7. Saat komputer baru dinyalakan, client akan langsung otomatis berjalan dan terminimalkan ke **System Tray** (di taskbar pojok kanan bawah dekat jam) tanpa memunculkan jendela di layar. Performa monitoring tetap berjalan 100% di latar belakang.
+8. Untuk membuka kembali antarmuka dari latar belakang, klik kanan atau klik dua kali ikon perisai di System Tray lalu pilih **"Buka Aplikasi"**.
 
 ---
 
@@ -72,4 +73,3 @@ Jika Anda ingin aplikasi ini berupa file `.exe` yang bisa langsung diklik dua ka
    pyinstaller --noconsole --onefile run_client.py
    ```
 File `.exe` siap pakai akan berada di dalam folder `dist/`.
-
