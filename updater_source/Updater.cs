@@ -10,7 +10,7 @@ namespace RemoteWebMonitor
         [STAThread]
         static void Main(string[] args)
         {
-            // Argumen: Updater.exe <PID_PROSES_LAMA> <PATH_FILE_BARU> <PATH_FILE_TARGET> [ARGUMEN_TAMBAHAN]
+            // Penggunaan: Updater.exe <PID_PROSES_LAMA> <PATH_FILE_BARU> <PATH_FILE_TARGET> [ARGUMEN_TAMBAHAN]
             if (args.Length < 3)
             {
                 return;
@@ -18,13 +18,19 @@ namespace RemoteWebMonitor
 
             try
             {
+                // 1. Bersihkan variabel lingkungan PyInstaller warisan dari memori saat ini
+                Environment.SetEnvironmentVariable("_MEIPASS2", null);
+                Environment.SetEnvironmentVariable("_MEIPASS", null);
+                Environment.SetEnvironmentVariable("PYTHONHOME", null);
+                Environment.SetEnvironmentVariable("PYTHONPATH", null);
+
                 int oldPid;
                 int.TryParse(args[0], out oldPid);
                 string newFile = args[1];
                 string targetFile = args[2];
                 string extraArgs = args.Length > 3 ? args[3] : "";
 
-                // 1. Tunggu proses aplikasi lama benar-benar mati dan melepaskan file lock
+                // 2. Tunggu proses aplikasi lama benar-benar mati dan melepaskan file lock
                 if (oldPid > 0)
                 {
                     try
@@ -32,7 +38,7 @@ namespace RemoteWebMonitor
                         Process proc = Process.GetProcessById(oldPid);
                         if (!proc.HasExited)
                         {
-                            if (!proc.WaitForExit(5000))
+                            if (!proc.WaitForExit(4000))
                             {
                                 proc.Kill();
                                 proc.WaitForExit(1000);
@@ -41,14 +47,14 @@ namespace RemoteWebMonitor
                     }
                     catch
                     {
-                        // Proses mungkin sudah keluar sebelum ini
+                        // Proses mungkin sudah keluar
                     }
                 }
 
                 // Beri jeda ekstra agar Windows OS melepaskan handle DLL/file sepenuhnya
-                Thread.Sleep(1000);
+                Thread.Sleep(800);
 
-                // 2. Loop menyalin file baru menimpa file lama (hingga 10 kali retry jika file masih terkunci)
+                // 3. Loop menyalin file baru menimpa file lama (hingga 10 kali retry)
                 bool success = false;
                 for (int i = 0; i < 10; i++)
                 {
@@ -63,11 +69,11 @@ namespace RemoteWebMonitor
                     }
                     catch
                     {
-                        Thread.Sleep(1000);
+                        Thread.Sleep(800);
                     }
                 }
 
-                // 3. Hapus file unduhan sementara setelah berhasil disalin
+                // 4. Hapus file unduhan sementara setelah berhasil disalin
                 if (success)
                 {
                     try
@@ -79,17 +85,27 @@ namespace RemoteWebMonitor
                     }
                     catch { }
 
-                    // 4. Jalankan aplikasi baru melalui Windows Shell independen (bersih dari memori lama)
-                    string workDir = Path.GetDirectoryName(targetFile);
-                    ProcessStartInfo psi = new ProcessStartInfo();
-                    psi.FileName = targetFile;
-                    psi.WorkingDirectory = workDir;
+                    // 5. Jalankan aplikasi baru
+                    // Jika ada argumen tambahan (seperti --minimized untuk ClientAgent)
                     if (!string.IsNullOrEmpty(extraArgs))
                     {
+                        ProcessStartInfo psi = new ProcessStartInfo();
+                        psi.FileName = targetFile;
                         psi.Arguments = extraArgs;
+                        psi.WorkingDirectory = Path.GetDirectoryName(targetFile);
+                        psi.UseShellExecute = true;
+                        Process.Start(psi);
                     }
-                    psi.UseShellExecute = true;
-                    Process.Start(psi);
+                    else
+                    {
+                        // Untuk ServerAdmin: Luncurkan via explorer.exe Windows Shell murni
+                        // Ini menjamin 100% proses baru di-spawn dari Desktop tanpa mewarisi memory leak apapun!
+                        ProcessStartInfo psi = new ProcessStartInfo();
+                        psi.FileName = "explorer.exe";
+                        psi.Arguments = "\"" + targetFile + "\"";
+                        psi.UseShellExecute = false;
+                        Process.Start(psi);
+                    }
                 }
             }
             catch { }
