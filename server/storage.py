@@ -5,12 +5,15 @@ import sys
 from typing import List
 
 def get_config_file() -> str:
-    """Mendapatkan path penyimpanan file konfigurasi yang persisten."""
-    if getattr(sys, 'frozen', False):
-        base = os.path.dirname(sys.executable)
-    else:
-        base = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base, "blocked_sites.json")
+    """Mendapatkan path penyimpanan file konfigurasi yang persisten di AppData Local."""
+    local_app_data = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
+    app_dir = os.path.join(local_app_data, "RemotePCWebMonitor")
+    try:
+        os.makedirs(app_dir, exist_ok=True)
+        return os.path.join(app_dir, "blocked_sites.json")
+    except Exception:
+        base = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(base, "blocked_sites.json")
 
 DEFAULT_DOMAINS = [
     "youtube",

@@ -11,41 +11,46 @@ _db_lock = threading.Lock()
 _last_activity_cache: Dict[str, Tuple[str, str, int, float]] = {}  # client_id -> (browser, title, is_blocked, timestamp)
 
 def get_db_path() -> str:
-    """Mendapatkan path penyimpanan database SQLite server_history.db."""
-    if getattr(sys, 'frozen', False):
-        base = os.path.dirname(sys.executable)
-    else:
-        # Root direktori proyek
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base, "server_history.db")
+    """Mendapatkan path penyimpanan database SQLite server_history.db di AppData Local yang aman."""
+    local_app_data = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
+    app_dir = os.path.join(local_app_data, "RemotePCWebMonitor")
+    try:
+        os.makedirs(app_dir, exist_ok=True)
+        return os.path.join(app_dir, "server_history.db")
+    except Exception:
+        base = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(base, "server_history.db")
 
 def init_db():
     """Inisialisasi tabel dan indeks database jika belum ada."""
     with _db_lock:
-        db_path = get_db_path()
-        conn = sqlite3.connect(db_path)
         try:
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS browser_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TEXT NOT NULL,
-                    client_id TEXT,
-                    hostname TEXT,
-                    ip_address TEXT,
-                    browser TEXT,
-                    title TEXT,
-                    url_snippet TEXT,
-                    is_blocked INTEGER DEFAULT 0,
-                    matched_rule TEXT
-                );
-            """)
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_hist_time ON browser_history(timestamp);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_hist_hostname ON browser_history(hostname);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_hist_blocked ON browser_history(is_blocked);")
-            conn.commit()
-        finally:
-            conn.close()
+            db_path = get_db_path()
+            conn = sqlite3.connect(db_path)
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS browser_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp TEXT NOT NULL,
+                        client_id TEXT,
+                        hostname TEXT,
+                        ip_address TEXT,
+                        browser TEXT,
+                        title TEXT,
+                        url_snippet TEXT,
+                        is_blocked INTEGER DEFAULT 0,
+                        matched_rule TEXT
+                    );
+                """)
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_hist_time ON browser_history(timestamp);")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_hist_hostname ON browser_history(hostname);")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_hist_blocked ON browser_history(is_blocked);")
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception as e:
+            print(f"[DB] Peringatan: Inisialisasi database ditunda/gagal: {e}")
 
 def add_history_entry(
     client_id: str,
