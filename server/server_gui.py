@@ -921,6 +921,7 @@ class ServerApp(ctk.CTk):
                     if err:
                         messagebox.showinfo("Status Update", f"Informasi GitHub:\n{err}")
                     else:
+                        self._append_log(f"Pengecekan update selesai ({time.strftime('%H:%M:%S')}): Server sudah menggunakan versi terbaru (v{APP_VERSION}).")
                         messagebox.showinfo(
                             "Versi Terbaru",
                             f"Aplikasi Server sudah menggunakan versi terbaru (v{APP_VERSION})."
@@ -977,7 +978,7 @@ class ServerApp(ctk.CTk):
                     prog_bar.set(percent / 100.0)
                     lbl_pct.configure(text=f"{percent}%")
                 elif status == "installing":
-                    lbl_status.configure(text="Memasang dan me-restart aplikasi server...")
+                    lbl_status.configure(text="Mengalihkan ke Updater... Jendela aplikasi akan menutup.")
                     prog_bar.set(1.0)
                     lbl_pct.configure(text="100%")
                 elif status == "failed":
