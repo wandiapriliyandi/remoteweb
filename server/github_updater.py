@@ -151,65 +151,30 @@ def download_file_with_progress(
         return False
 
 def run_server_detached_updater_batch(new_exe_path: str, target_exe_path: str) -> bool:
-    """Menjalankan script PowerShell terpisah untuk menimpa file ServerAdmin.exe lama dan merestart aplikasi secara bersih."""
-    app_data = os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local"))
-    runtime_dir = os.path.join(app_data, "RemotePCWebMonitor")
-    os.makedirs(runtime_dir, exist_ok=True)
-    ps1_path = os.path.join(runtime_dir, f"update_runner_{int(time.time())}.ps1")
+    """Menjalankan instruksi PowerShell terisolasi untuk menimpa file ServerAdmin.exe lama dan merestart aplikasi tanpa file script baru."""
     current_pid = os.getpid()
     target_dir = os.path.dirname(os.path.abspath(target_exe_path))
 
-    ps1_content = f"""# Script Pembaruan Otomatis RemoteWebMonitor
-$ErrorActionPreference = 'SilentlyContinue'
-
-# 1. Bersihkan variabel lingkungan PyInstaller agar executable baru tidak mewarisi cache lama
-Remove-Item Env:_MEIPASS2 -Force
-Remove-Item Env:_MEIPASS -Force
-Remove-Item Env:PYTHONHOME -Force
-Remove-Item Env:PYTHONPATH -Force
-
-# 2. Tunggu proses lama berhenti dengan aman
-Start-Sleep -Seconds 1
-try {{
-    Wait-Process -Id {current_pid} -Timeout 3
-}} catch {{}}
-
-# 3. Pastikan proses lama mati sepenuhnya untuk melepaskan file lock
-Stop-Process -Id {current_pid} -Force
-Stop-Process -Name 'ServerAdmin' -Force
-Start-Sleep -Seconds 1
-
-# 4. Salin file exe baru menimpa file target resmi
-$copied = $false
-for ($i = 0; $i -lt 10; $i++) {{
-    try {{
-        Copy-Item -Path '{new_exe_path}' -Destination '{target_exe_path}' -Force
-        $copied = $true
-        break
-    }} catch {{
-        Start-Sleep -Seconds 1
-    }}
-}}
-
-if ($copied) {{
-    Remove-Item -Path '{new_exe_path}' -Force
-    # 5. Jalankan aplikasi baru dari folder resmi AppData secara bersih
-    Start-Process -FilePath '{target_exe_path}' -WorkingDirectory '{target_dir}'
-}}
-
-# 6. Bersihkan script ini
-Remove-Item -Path $MyInvocation.MyCommand.Path -Force
-"""
+    ps_cmd = (
+        f"$ErrorActionPreference = 'SilentlyContinue'; "
+        f"Remove-Item Env:_MEIPASS2 -Force; Remove-Item Env:_MEIPASS -Force; "
+        f"Remove-Item Env:PYTHONHOME -Force; Remove-Item Env:PYTHONPATH -Force; "
+        f"Start-Sleep -Seconds 1; "
+        f"try {{ Wait-Process -Id {current_pid} -Timeout 3 }} catch {{}}; "
+        f"Stop-Process -Id {current_pid} -Force; "
+        f"Stop-Process -Name 'ServerAdmin' -Force; "
+        f"Start-Sleep -Seconds 1; "
+        f"$ok = $false; "
+        f"for ($i=0; $i -lt 10; $i++) {{ "
+        f"  try {{ Copy-Item -Path '{new_exe_path}' -Destination '{target_exe_path}' -Force; $ok = $true; break }} "
+        f"  catch {{ Start-Sleep -Seconds 1 }} "
+        f"}}; "
+        f"Remove-Item -Path '{new_exe_path}' -Force; "
+        f"if ($ok) {{ Start-Process -FilePath '{target_exe_path}' -WorkingDirectory '{target_dir}' }}"
+    )
 
     try:
-        with open(ps1_path, "w", encoding="utf-8") as f:
-            f.write(ps1_content)
-
-        DETACHED_PROCESS = 0x00000008
         CREATE_NO_WINDOW = 0x08000000
-        flags = DETACHED_PROCESS | CREATE_NO_WINDOW
-
-        # Bersihkan env sebelum spawn
         clean_env = os.environ.copy()
         clean_env.pop("_MEIPASS2", None)
         clean_env.pop("_MEIPASS", None)
@@ -217,14 +182,14 @@ Remove-Item -Path $MyInvocation.MyCommand.Path -Force
         clean_env.pop("PYTHONPATH", None)
 
         subprocess.Popen(
-            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1_path],
-            creationflags=flags,
+            ["powershell.exe", "-WindowStyle", "Hidden", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd],
+            creationflags=CREATE_NO_WINDOW,
             close_fds=True,
             env=clean_env
         )
         return True
     except Exception as e:
-        print(f"[GH_UPDATER] Gagal menjalankan script updater powershell: {e}")
+        print(f"[GH_UPDATER] Gagal menjalankan update powershell: {e}")
         return False
 
 def perform_server_update(
@@ -233,10 +198,8 @@ def perform_server_update(
 ) -> bool:
     """Alur lengkap: unduh file baru, verifikasi, jalankan batch runner, lalu keluar dari proses."""
     target_exe = get_server_exe_path()
-    install_dir = os.path.dirname(target_exe)
-    os.makedirs(install_dir, exist_ok=True)
-
-    new_exe = os.path.join(install_dir, "ServerAdmin_new.exe")
+    temp_dir = os.environ.get("TEMP", os.path.expanduser(r"~\AppData\Local\Temp"))
+    new_exe = os.path.join(temp_dir, f"ServerAdmin_dl_{int(time.time())}.exe")
 
     if on_status:
         on_status("downloading", 0)
