@@ -1,4 +1,4 @@
-push"""Modul untuk mengelola Auto-Start PC Client saat Windows dinyalakan."""
+"""Modul untuk mengelola Auto-Start PC Client saat Windows dinyalakan."""
 import os
 import sys
 import winreg
