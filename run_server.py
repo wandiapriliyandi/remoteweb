@@ -21,7 +21,22 @@ def log_fatal_error(err_msg: str):
     except Exception:
         pass
 
+def cleanup_zombie_instances():
+    """Membersihkan proses ServerAdmin lama yang masih menggantung di background."""
+    try:
+        import subprocess
+        current_pid = os.getpid()
+        # Matikan proses ServerAdmin lama kecuali proses ini sendiri
+        subprocess.run(
+            ["taskkill", "/F", "/FI", f"PID ne {current_pid}", "/IM", "ServerAdmin*.exe"],
+            capture_output=True,
+            creationflags=0x08000000
+        )
+    except Exception:
+        pass
+
 if __name__ == "__main__":
+    cleanup_zombie_instances()
     try:
         from server.server_gui import run_server_gui
         run_server_gui()

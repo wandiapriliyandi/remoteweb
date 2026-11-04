@@ -48,6 +48,8 @@ class ClientSession:
         self.last_matched_rule = ""
         self.violation_count = 0
 
+http.server.ThreadingHTTPServer.allow_reuse_address = True
+
 class UpdateHTTPHandler(http.server.BaseHTTPRequestHandler):
     """Handler HTTP sederhana untuk melayani download ClientAgent.exe ke client."""
     def do_GET(self):
@@ -331,7 +333,12 @@ class RemoteServerEngine:
         if self._httpd:
             try:
                 self._httpd.shutdown()
+                self._httpd.server_close()
             except Exception:
                 pass
         if self._server and self._loop:
-            self._loop.call_soon_threadsafe(self._server.close)
+            try:
+                self._loop.call_soon_threadsafe(self._server.close)
+                self._loop.call_soon_threadsafe(self._loop.stop)
+            except Exception:
+                pass

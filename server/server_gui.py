@@ -844,8 +844,12 @@ class ServerApp(ctk.CTk):
         threading.Thread(target=_worker, daemon=True).start()
 
     def destroy(self):
-        self.engine.stop()
+        try:
+            self.engine.stop()
+        except Exception:
+            pass
         super().destroy()
+        os._exit(0)
 
 def run_server_gui():
     app = ServerApp()
