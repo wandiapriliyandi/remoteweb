@@ -6,7 +6,22 @@ import winreg
 import customtkinter as ctk
 from tkinter import messagebox
 
-from installer.uninstall_gui import perform_uninstall
+try:
+    from uninstall_gui import perform_uninstall
+except (ImportError, ModuleNotFoundError):
+    try:
+        from installer.uninstall_gui import perform_uninstall
+    except (ImportError, ModuleNotFoundError):
+        import sys
+        _cur_dir = os.path.dirname(os.path.abspath(__file__))
+        _par_dir = os.path.dirname(_cur_dir)
+        for _p in (_cur_dir, _par_dir):
+            if _p not in sys.path:
+                sys.path.insert(0, _p)
+        try:
+            from uninstall_gui import perform_uninstall
+        except (ImportError, ModuleNotFoundError):
+            from installer.uninstall_gui import perform_uninstall
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
