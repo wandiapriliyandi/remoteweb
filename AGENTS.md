@@ -16,5 +16,12 @@
   ```powershell
   python run_tests.py
   ```
-- Seluruh 9 skenario pengujian (Sintaks kode, SQLite AppData, Penyimpanan Konfigurasi, Protokol Pesan, Semantic Versioning, dan GitHub Updater) harus berstatus **OK (PASS)**.
+- Seluruh 11 skenario pengujian (Sintaks kode, SQLite AppData, Penyimpanan Konfigurasi, Protokol Pesan, Semantic Versioning, dan GitHub Updater) harus berstatus **OK (PASS)**.
 - Jika ada satu saja pengujian yang gagal, batalkan proses komit dan perbaiki kodenya terlebih dahulu.
+
+## 3. Standar Arsitektur Updater & Anti "Failed to Load Python DLL / Local Temp" (STANDAR BAKU - JANGAN DIUBAH)
+- **DILARANG MENGUBAH MEKANISME UPDATER NATIVE C#**:
+  1. Updater wajib menggunakan binary native C# Windows murni (`updater_source/Updater.cs` -> `assets/Updater.exe`) berukuran ~5 KB tanpa dependensi Python runtime.
+  2. `Updater.exe` bertanggung jawab membersihkan environment variable PyInstaller (`_MEIPASS2`, `_MEIPASS`, `PYTHONHOME`, `PYTHONPATH`) dan meluncurkan executable baru melalui Windows Shell (`explorer.exe`) agar proses baru tidak terkontaminasi path folder `%TEMP%` lama.
+  3. Baik Setup Wizard (`installer/setup_gui.py` dan `installer/setup_client_gui.py`) maupun updater otomatis **WAJIB** menggunakan fungsi aman `safe_copy_file` (dengan fitur *auto-kill* proses lama, *retry loop*, dan trik *rename fallback* `.old`) untuk menghindari penguncian berkas Windows (`[WinError 32] / PermissionError`).
+  4. Dokumentasi teknis lengkap tercatat di `DOCS_UPDATER_ARCHITECTURE.md`.
