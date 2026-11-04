@@ -30,6 +30,9 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Build Uninstall.exe
+        run: pyinstaller Uninstall.spec
+
       - name: Build ClientAgent.exe
         run: pyinstaller ClientAgent.spec
 
@@ -51,6 +54,6 @@ jobs:
             dist/ServerAdmin.exe
             dist/ClientAgent.exe
             dist/Setup_RemoteMonitor.exe
+            dist/Uninstall.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
