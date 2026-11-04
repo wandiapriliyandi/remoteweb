@@ -20,13 +20,26 @@ Aplikasi ini terdiri dari dua program desktop berbasis Python:
 Tersedia file installer di dalam folder `dist/`:
 
 1. **`dist/Setup_Client.exe` (Disarankan untuk Komputer Target / Siswa / Karyawan)**:
-   - **Khusus Client Agent saja** (ukuran ringan, tidak dicampur dengan Server Admin).
+   - **Khusus Client Agent saja** (tidak dicampur dengan Server Admin).
    - Pengguna target tidak akan melihat atau bisa mengakses dashboard server.
    - Bisa langsung mengisi IP Server Admin saat instalasi.
    - Otomatis mendaftarkan ke Windows Startup dan terminimalkan ke System Tray.
+   - Mengemas file `Uninstall.exe` otomatis ke dalam menu Start.
 
 2. **`dist/Setup_RemoteMonitor.exe` (Installer Gabungan Admin)**:
    - Master Installer Wizard serba guna dengan opsi memilih instalasi Server Admin atau Client Target.
+
+3. **`dist/Uninstall.exe` (Aplikasi Pencopotan / Uninstaller)**:
+   - Menghapus aplikasi secara tuntas, menghentikan proses latar belakang, menghapus auto-start registry, dan membersihkan seluruh shortcut.
+
+---
+
+## 🗑️ Cara Mencopot Pemasangan (Uninstall)
+
+Terdapat 3 cara mudah untuk menghapus aplikasi dari komputer:
+1. **Melalui Start Menu**: Buka Start Menu Windows > cari folder `RemotePCWebMonitor` > klik **"Copot Pemasangan (Uninstall)"**.
+2. **Melalui Pengaturan Windows**: Buka **Windows Settings > Apps > Installed Apps** (atau Control Panel) > cari `Remote PC Web Monitor` > klik **Uninstall**.
+3. **Melalui Installer**: Jalankan kembali file `Setup_Client.exe` atau `Setup_RemoteMonitor.exe`, sistem otomatis mendeteksi aplikasi sudah terpasang dan menampilkan tombol **"🗑️ Copot (Uninstall)"**.
 
 ---
 
@@ -76,8 +89,12 @@ Jika Anda ingin aplikasi ini berupa file `.exe` yang bisa langsung diklik dua ka
    ```bash
    pyinstaller --noconsole --onefile run_client.py
    ```
-3. **Untuk Installer Khusus Client**:
+3. **Untuk Uninstaller**:
    ```bash
-   pyinstaller --noconsole --onefile --collect-all customtkinter --add-data "dist/ClientAgent.exe;." -n Setup_Client installer/setup_client_gui.py
+   pyinstaller --noconsole --onefile --collect-all customtkinter -n Uninstall installer/uninstall_gui.py
+   ```
+4. **Untuk Installer Khusus Client**:
+   ```bash
+   pyinstaller --noconsole --onefile --collect-all customtkinter --add-data "dist/ClientAgent.exe;." --add-data "dist/Uninstall.exe;." -n Setup_Client installer/setup_client_gui.py
    ```
 File `.exe` siap pakai akan berada di dalam folder `dist/`.

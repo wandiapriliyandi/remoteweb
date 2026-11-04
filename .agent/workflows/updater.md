@@ -99,3 +99,4 @@ Mengatasi kendala *Windows Executable File-Lock*:
 - [ ] Tambahkan listener update di [`client/client_core.py`](file:///c:/xampp/htdocs/remoteweb/client/client_core.py)
 - [ ] Tambahkan tombol update & kolom versi di [`server/server_gui.py`](file:///c:/xampp/htdocs/remoteweb/server/server_gui.py)
 - [ ] Compile ulang executable di folder `dist/`
+

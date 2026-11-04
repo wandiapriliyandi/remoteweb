@@ -6,6 +6,8 @@ import winreg
 import customtkinter as ctk
 from tkinter import messagebox
 
+from installer.uninstall_gui import perform_uninstall
+
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -48,6 +50,23 @@ def register_startup(exe_path: str, app_name: str = "RemotePCWebMonitorClient"):
         print(f"Gagal mendaftarkan startup: {e}")
         return False
 
+def register_uninstall_entry(install_dir: str, app_title: str = "Remote PC Web Monitor"):
+    """Mendaftarkan aplikasi ke Windows Settings > Installed Apps (Control Panel)."""
+    try:
+        reg_path = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\RemotePCWebMonitor"
+        key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, reg_path)
+        uninstall_exe = os.path.join(install_dir, "Uninstall.exe")
+        winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, app_title)
+        winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, "1.0.0")
+        winreg.SetValueEx(key, "Publisher", 0, winreg.REG_SZ, "RemotePCWebMonitor")
+        winreg.SetValueEx(key, "UninstallString", 0, winreg.REG_SZ, f'"{uninstall_exe}"')
+        winreg.SetValueEx(key, "InstallLocation", 0, winreg.REG_SZ, install_dir)
+        winreg.SetValueEx(key, "NoModify", 0, winreg.REG_DWORD, 1)
+        winreg.SetValueEx(key, "NoRepair", 0, winreg.REG_DWORD, 1)
+        winreg.CloseKey(key)
+    except Exception as e:
+        print(f"Gagal mendaftarkan uninstaller ke Windows: {e}")
+
 class InstallerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -59,6 +78,10 @@ class InstallerApp(ctk.CTk):
         self.install_role = ctk.StringVar(value="client")
         self.auto_start_var = ctk.BooleanVar(value=True)
         self.create_desktop_var = ctk.BooleanVar(value=True)
+
+        local_app_data = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
+        self.install_dir = os.path.join(local_app_data, "RemotePCWebMonitor")
+        self.is_already_installed = os.path.exists(os.path.join(self.install_dir, "ClientAgent.exe")) or os.path.exists(os.path.join(self.install_dir, "ServerAdmin.exe"))
 
         self._build_ui()
 
@@ -166,9 +189,22 @@ class InstallerApp(ctk.CTk):
         footer.pack(fill="x", side="bottom")
         footer.pack_propagate(False)
 
+        if self.is_already_installed:
+            btn_uninst = ctk.CTkButton(
+                footer,
+                text="🗑️ Copot (Uninstall)",
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color="#dc2626",
+                hover_color="#b91c1c",
+                height=36,
+                command=self._do_uninstall_flow
+            )
+            btn_uninst.pack(side="left", padx=24, pady=12)
+
+        install_text = "Pasang Ulang / Perbarui  ▶" if self.is_already_installed else "Pasang Sekarang (Install)  ▶"
         self.btn_install = ctk.CTkButton(
             footer,
-            text="Pasang Sekarang (Install)  ▶",
+            text=install_text,
             font=ctk.CTkFont(size=13, weight="bold"),
             fg_color="#0284c7",
             hover_color="#0369a1",
@@ -185,22 +221,31 @@ class InstallerApp(ctk.CTk):
             self.chk_autostart.configure(state="normal")
             self.chk_autostart.select()
 
+    def _do_uninstall_flow(self):
+        if messagebox.askyesno(
+            "Konfirmasi Pencopotan",
+            "Apakah Anda yakin ingin mencopot pemasangan aplikasi dari komputer ini?"
+        ):
+            success, msg = perform_uninstall(remove_config=True)
+            if success:
+                messagebox.showinfo("Berhasil", "Aplikasi berhasil dicopot.")
+                self.destroy()
+            else:
+                messagebox.showwarning("Peringatan", f"Sebagian komponen belum terhapus:\n{msg}")
+
     def _do_install(self):
         role = self.install_role.get()
         is_client = (role == "client")
         app_name = "ClientAgent.exe" if is_client else "ServerAdmin.exe"
         shortcut_title = "Client Agent - Web Monitor" if is_client else "Server Admin - Web Monitor"
 
-        # Tentukan direktori instalasi di AppData Lokal (tanpa perlu UAC/Admin)
-        local_app_data = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
-        install_dir = os.path.join(local_app_data, "RemotePCWebMonitor")
+        install_dir = self.install_dir
         os.makedirs(install_dir, exist_ok=True)
 
         target_exe = os.path.join(install_dir, app_name)
 
         # Cari file sumber exe
         base_dir = get_base_dir()
-        # Periksa kemungkinan lokasi file exe
         possible_src = [
             os.path.join(base_dir, app_name),
             os.path.join(base_dir, "dist", app_name),
@@ -220,11 +265,20 @@ class InstallerApp(ctk.CTk):
             # Salin file ke folder instalasi
             shutil.copy2(src_exe, target_exe)
 
-            # Buat shortcut desktop
-            if self.create_desktop_var.get():
-                desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-                shortcut_path = os.path.join(desktop, f"{shortcut_title}.lnk")
-                create_windows_shortcut(target_exe, shortcut_path, description=shortcut_title)
+            # Salin Uninstall.exe jika tersedia
+            possible_uninst = [
+                os.path.join(base_dir, "Uninstall.exe"),
+                os.path.join(base_dir, "dist", "Uninstall.exe"),
+                os.path.join(os.path.dirname(base_dir), "dist", "Uninstall.exe")
+            ]
+            uninst_target = os.path.join(install_dir, "Uninstall.exe")
+            for up in possible_uninst:
+                if os.path.exists(up):
+                    try:
+                        shutil.copy2(up, uninst_target)
+                    except Exception:
+                        pass
+                    break
 
             # Buat shortcut Start Menu
             appdata_roaming = os.environ.get("APPDATA", os.path.expanduser("~\\AppData\\Roaming"))
@@ -233,6 +287,18 @@ class InstallerApp(ctk.CTk):
             start_shortcut = os.path.join(start_menu_programs, f"{shortcut_title}.lnk")
             create_windows_shortcut(target_exe, start_shortcut, description=shortcut_title)
 
+            # Buat shortcut uninstaller di Start Menu
+            if os.path.exists(uninst_target):
+                uninst_sc = os.path.join(start_menu_programs, "Copot Pemasangan (Uninstall).lnk")
+                create_windows_shortcut(uninst_target, uninst_sc, description="Copot Pemasangan")
+                register_uninstall_entry(install_dir, f"Remote PC Web Monitor ({shortcut_title})")
+
+            # Buat shortcut desktop jika dipilih
+            if self.create_desktop_var.get():
+                desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+                shortcut_path = os.path.join(desktop, f"{shortcut_title}.lnk")
+                create_windows_shortcut(target_exe, shortcut_path, description=shortcut_title)
+
             # Aktifkan startup jika dipilih
             if is_client and self.auto_start_var.get():
                 register_startup(target_exe)
@@ -240,7 +306,7 @@ class InstallerApp(ctk.CTk):
             # Selesai
             success_msg = f"Instalasi Berhasil!\n\nAplikasi telah dipasang di:\n{target_exe}\n\nShortcut telah dibuat di Desktop dan Start Menu."
             if is_client and self.auto_start_var.get():
-                success_msg += "\n\nOtomatis berjalan saat PC dinyalakan: AKTIF."
+                success_msg += "\n\nOtomatis berjalan saat PC dinyalakan: AKTIF (di System Tray)."
 
             if messagebox.askyesno("Instalasi Selesai", f"{success_msg}\n\nApakah Anda ingin langsung menjalankan aplikasi sekarang?"):
                 import subprocess
@@ -257,4 +323,3 @@ def run_installer():
 
 if __name__ == "__main__":
     run_installer()
-
