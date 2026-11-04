@@ -73,7 +73,11 @@ def register_uninstall_entry(install_dir: str, app_title: str = "Remote PC Web M
         key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, reg_path)
         uninstall_exe = os.path.join(install_dir, "Uninstall.exe")
         winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, app_title)
-        winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, "1.0.0")
+        try:
+            from shared.protocol import APP_VERSION
+        except Exception:
+            APP_VERSION = "1.1.0"
+        winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, APP_VERSION)
         winreg.SetValueEx(key, "Publisher", 0, winreg.REG_SZ, "RemotePCWebMonitor")
         winreg.SetValueEx(key, "UninstallString", 0, winreg.REG_SZ, f'"{uninstall_exe}"')
         winreg.SetValueEx(key, "InstallLocation", 0, winreg.REG_SZ, install_dir)

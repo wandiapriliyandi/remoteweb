@@ -3,12 +3,18 @@ import os
 import sys
 import tkinter as tk
 from tkinter import messagebox, filedialog
-from typing import List
+import threading
+from typing import List, Optional, Dict, Any
 import customtkinter as ctk
 
 from shared.protocol import APP_VERSION
 from server.server_core import RemoteServerEngine
 from server.storage import load_blocked_domains, save_blocked_domains
+from server.github_updater import (
+    check_github_update,
+    perform_server_update,
+    get_server_exe_path
+)
 
 try:
     from server.history_db import (
@@ -50,6 +56,7 @@ class ServerApp(ctk.CTk):
 
         # Jalankan server
         self.engine.start()
+        self._start_background_update_check()
 
     def _build_ui(self):
         # 1. Header Frame
@@ -73,6 +80,31 @@ class ServerApp(ctk.CTk):
             text_color="#4ade80"
         )
         self.lbl_server_info.pack(side="right", padx=16, pady=12)
+
+        # Tombol Banner Pembaruan GitHub (Tersembunyi sampai ada rilis baru)
+        self.latest_release_info: Optional[Dict[str, Any]] = None
+        self.btn_update_banner = ctk.CTkButton(
+            header,
+            text="🚀 Versi Baru Tersedia!",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#16a34a",
+            hover_color="#15803d",
+            height=30,
+            command=self._prompt_server_update
+        )
+
+        # Tombol Manual Cek Update GitHub
+        self.btn_check_update = ctk.CTkButton(
+            header,
+            text="🔄 Cek Update",
+            font=ctk.CTkFont(size=12),
+            width=95,
+            height=30,
+            fg_color="#1e293b",
+            hover_color="#334155",
+            command=lambda: self._check_github_update_action(silent=False)
+        )
+        self.btn_check_update.pack(side="right", padx=(0, 10), pady=12)
 
         # 2. Main Content Split: Kiri (Daftar Aturan) & Kanan (Live Monitoring Client)
         main_pane = ctk.CTkFrame(self, fg_color="transparent")
@@ -707,6 +739,109 @@ class ServerApp(ctk.CTk):
         entry = f"[{now}] {message}\n"
         self.txt_log.insert("end", entry)
         self.txt_log.see("end")
+
+    def _start_background_update_check(self):
+        """Memulai pengecekan update GitHub secara senyap di background thread saat startup."""
+        threading.Thread(target=lambda: self._check_github_update_action(silent=True), daemon=True).start()
+
+    def _check_github_update_action(self, silent: bool = False):
+        """Memeriksa update rilis di GitHub."""
+        if not silent:
+            self.btn_check_update.configure(text="⏳ Memeriksa...", state="disabled")
+
+        info = check_github_update()
+
+        def _update_ui():
+            if not silent:
+                self.btn_check_update.configure(text="🔄 Cek Update", state="normal")
+
+            if info.get("has_update"):
+                self.latest_release_info = info
+                ver = info.get("latest_version")
+                self.btn_update_banner.configure(text=f"🚀 Update v{ver} Tersedia!")
+                self.btn_update_banner.pack(side="right", padx=(0, 8), pady=12)
+                self._append_log(f"⭐ Versi baru v{ver} tersedia di GitHub Releases!")
+
+                if not silent:
+                    self._prompt_server_update()
+            else:
+                self.btn_update_banner.pack_forget()
+                if not silent:
+                    err = info.get("error")
+                    if err:
+                        messagebox.showinfo("Status Update", f"Informasi GitHub:\n{err}")
+                    else:
+                        messagebox.showinfo(
+                            "Versi Terbaru",
+                            f"Aplikasi Server sudah menggunakan versi terbaru (v{APP_VERSION})."
+                        )
+
+        self.after(0, _update_ui)
+
+    def _prompt_server_update(self):
+        """Menampilkan dialog konfirmasi dan catatan rilis update server."""
+        if not self.latest_release_info:
+            return
+
+        ver = self.latest_release_info.get("latest_version")
+        notes = self.latest_release_info.get("release_notes", "").strip()
+        asset_url = self.latest_release_info.get("server_asset_url")
+
+        msg = f"Versi baru (v{ver}) telah dirilis di GitHub!\nVersi saat ini: v{APP_VERSION}\n\n"
+        if notes:
+            msg += f"Catatan Perubahan:\n{notes[:300]}\n\n"
+
+        if not asset_url:
+            msg += "File executable belum diunggah di rilis ini. Buka halaman GitHub Release di browser?"
+            if messagebox.askyesno("Pembaruan Tersedia", msg):
+                import webbrowser
+                webbrowser.open(self.latest_release_info.get("html_url", ""))
+            return
+
+        msg += "Apakah Anda ingin mengunduh dan memasang pembaruan sekarang?\n(Server akan otomatis me-restart ke versi baru)."
+        if messagebox.askyesno("Konfirmasi Pembaruan Server", msg):
+            self._start_download_server_update(asset_url, ver)
+
+    def _start_download_server_update(self, download_url: str, version: str):
+        """Menampilkan modal progres dan menjalankan unduhan update."""
+        modal = ctk.CTkToplevel(self)
+        modal.title(f"Memperbarui Server ke v{version}")
+        modal.geometry("400x160")
+        modal.resizable(False, False)
+        modal.transient(self)
+        modal.grab_set()
+
+        lbl_status = ctk.CTkLabel(modal, text=f"Mengunduh file ServerAdmin.exe (v{version})...", font=ctk.CTkFont(size=13, weight="bold"))
+        lbl_status.pack(pady=(20, 10))
+
+        prog_bar = ctk.CTkProgressBar(modal, width=320)
+        prog_bar.set(0)
+        prog_bar.pack(pady=10)
+
+        lbl_pct = ctk.CTkLabel(modal, text="0%", font=ctk.CTkFont(size=12))
+        lbl_pct.pack()
+
+        def _on_status(status: str, percent: int):
+            def _ui():
+                if status == "downloading":
+                    prog_bar.set(percent / 100.0)
+                    lbl_pct.configure(text=f"{percent}%")
+                elif status == "installing":
+                    lbl_status.configure(text="Memasang dan me-restart aplikasi server...")
+                    prog_bar.set(1.0)
+                    lbl_pct.configure(text="100%")
+                elif status == "failed":
+                    messagebox.showerror("Gagal Update", "Terjadi kesalahan saat mengunduh file update.")
+                    modal.destroy()
+            self.after(0, _ui)
+
+        def _worker():
+            self._append_log(f"Mengunduh pembaruan server v{version} dari GitHub...")
+            success = perform_server_update(download_url, _on_status)
+            if not success:
+                self.after(0, lambda: self._append_log("Gagal memperbarui aplikasi server."))
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def destroy(self):
         self.engine.stop()
