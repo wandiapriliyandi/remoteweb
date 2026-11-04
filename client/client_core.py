@@ -57,7 +57,10 @@ class ClientEngine:
 
     def log(self, message: str):
         if self.on_log:
-            self.on_log(message)
+            try:
+                self.on_log(message)
+            except Exception as e:
+                print(f"[CLIENT] {message} (UI error: {e})")
         else:
             print(f"[CLIENT] {message}")
 

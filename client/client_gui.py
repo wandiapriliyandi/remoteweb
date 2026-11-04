@@ -113,8 +113,8 @@ class ClientApp(ctk.CTk):
         # Sinkronisasi registry auto-start jika sebelumnya terdaftar tanpa argumen --minimized
         sync_autostart_command()
 
-        # Jalankan engine client (pemantauan browser & komunikasi WebSocket)
-        self.engine.start()
+        # Jalankan engine client setelah mainloop aktif dan stabil
+        self.after(150, self.engine.start)
 
         if start_minimized:
             # Pastikan tetap withdraw setelah build UI selesai

@@ -62,3 +62,4 @@ Saat pengguna menjalankan installer (`Setup_RemoteMonitor.exe`):
 - ⛔ **JANGAN PERNAH** menghapus `Updater.exe` atau `updater_source/Updater.cs`.
 - ⛔ **JANGAN PERNAH** mengubah pemanggilan update kembali ke batch file mentah atau subprocess python langsung tanpa isolasi environment `_MEIPASS2`.
 - ✅ **SELALU PERTAHANKAN** peluncuran aplikasi baru melalui mekanisme native C# atau Windows Shell murni.
+

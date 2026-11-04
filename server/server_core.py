@@ -108,9 +108,20 @@ class RemoteServerEngine:
 
     def log(self, message: str):
         if self.on_log:
-            self.on_log(message)
+            try:
+                self.on_log(message)
+            except Exception as e:
+                print(f"[SERVER] {message} (UI error: {e})")
         else:
             print(f"[SERVER] {message}")
+
+    def _notify_clients_changed(self):
+        """Pemberitahuan perubahan daftar client dengan penanganan error aman."""
+        if self.on_clients_changed:
+            try:
+                self._notify_clients_changed()
+            except Exception as e:
+                print(f"[CLIENTS_CHANGED ERROR] {e}")
 
     @staticmethod
     def find_client_exe_path() -> Optional[str]:
@@ -202,7 +213,7 @@ class RemoteServerEngine:
                         await websocket.send(sync_msg)
 
                     if self.on_clients_changed:
-                        self.on_clients_changed()
+                        self._notify_clients_changed()
 
                 elif mtype == TYPE_URL_ACTIVITY:
                     if client_session:
@@ -235,7 +246,7 @@ class RemoteServerEngine:
                         ).start()
 
                         if self.on_clients_changed:
-                            self.on_clients_changed()
+                            self._notify_clients_changed()
 
                 elif mtype == TYPE_UPDATE_PROGRESS:
                     if client_session:
@@ -250,7 +261,7 @@ class RemoteServerEngine:
                             self.log(f"❌ [UPDATE] {client_session.hostname} gagal mengunduh update.")
                         
                         if self.on_clients_changed:
-                            self.on_clients_changed()
+                            self._notify_clients_changed()
 
                 elif mtype == TYPE_PING:
                     await websocket.send(create_message(TYPE_PONG))
@@ -267,7 +278,7 @@ class RemoteServerEngine:
                     del self.clients[cid]
                     self.log(f"🔴 PC Client Terputus: {hname} ({remote_ip})")
                     if self.on_clients_changed:
-                        self.on_clients_changed()
+                        self._notify_clients_changed()
 
     def broadcast_rules(self, rules: List[str]):
         """Kirim daftar aturan kata kunci/domain terbaru ke SEMUA client."""
@@ -334,7 +345,7 @@ class RemoteServerEngine:
         self._send_to_ws(session.websocket, msg)
         self.log(f"⚡ Perintah {action.upper()} dikirim ke client '{session.hostname}' ({session.ip}).")
         if self.on_clients_changed:
-            self.on_clients_changed()
+            self._notify_clients_changed()
         return True
 
     def broadcast_power_command(self, action: str, delay: int = 5, message: str = "") -> int:
@@ -353,7 +364,7 @@ class RemoteServerEngine:
         count = len(self.clients)
         self.log(f"⚡ Perintah massal {action.upper()} dikirim ke {count} PC Client.")
         if self.on_clients_changed:
-            self.on_clients_changed()
+            self._notify_clients_changed()
         return count
 
     def _broadcast(self, msg: str):

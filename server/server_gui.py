@@ -78,7 +78,11 @@ class ServerApp(ctk.CTk):
         # Setup GUI Components
         self._build_ui()
 
-        # Jalankan server
+        # Jadwalkan server & background check berjalan setelah mainloop aktif dan stabil
+        self.after(150, self._startup_tasks)
+
+    def _startup_tasks(self):
+        """Memulai engine server dan pengecekan update setelah GUI siap sepenuhnya."""
         self.engine.start()
         self._start_background_update_check()
 
@@ -510,7 +514,11 @@ class ServerApp(ctk.CTk):
             self._append_log(f"🔄 Perintah RESTART dikirim ke PC '{session.hostname}' ({session.ip}).")
 
     def _update_client_list_threadsafe(self):
-        self.after(0, self._render_clients_ui)
+        try:
+            if hasattr(self, 'scroll_clients') and self.winfo_exists():
+                self.after(0, self._render_clients_ui)
+        except Exception:
+            pass
 
     def _render_clients_ui(self):
         for widget in self.scroll_clients.winfo_children():
@@ -881,7 +889,13 @@ class ServerApp(ctk.CTk):
             self._append_log("Seluruh riwayat aktivitas browser di database telah dibersihkan oleh Admin.")
 
     def _append_log_threadsafe(self, message: str):
-        self.after(0, lambda: self._append_log(message))
+        try:
+            if hasattr(self, 'txt_log') and self.winfo_exists():
+                self.after(0, lambda: self._append_log(message))
+            else:
+                print(f"[LOG] {message}")
+        except Exception:
+            print(f"[LOG] {message}")
 
     def _append_log(self, message: str):
         from datetime import datetime
