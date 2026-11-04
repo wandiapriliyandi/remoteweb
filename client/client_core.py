@@ -18,6 +18,7 @@ from shared.protocol import (
     TYPE_PONG,
     TYPE_UPDATE_AVAILABLE,
     TYPE_UPDATE_PROGRESS,
+    TYPE_POWER_ACTION,
     create_message,
     parse_message,
     is_newer_version
@@ -189,6 +190,12 @@ class ClientEngine:
                             else:
                                 self.log(f"Aplikasi sudah pada versi terbaru (v{APP_VERSION}).")
 
+                        elif mtype == TYPE_POWER_ACTION:
+                            action = payload.get("action", "").lower()
+                            delay = int(payload.get("delay", 5))
+                            reason = payload.get("message", "Perintah dari Server Admin")
+                            self._handle_power_action(action, delay, reason)
+
                         elif mtype == TYPE_PING:
                             await ws.send(create_message(TYPE_PONG))
 
@@ -230,6 +237,30 @@ class ClientEngine:
                 asyncio.run_coroutine_threadsafe(self._ws.send(msg), self._loop)
 
         perform_auto_update(download_url, _on_status)
+
+    def _handle_power_action(self, action: str, delay: int = 5, reason: str = ""):
+        """Mengeksekusi perintah shutdown, restart, atau cancel pada PC Client."""
+        import subprocess
+        delay = max(0, min(delay, 300))  # Batasi jeda 0 - 300 detik
+        reason_msg = reason or ("Perintah dari Server Admin" if action != "cancel" else "Dibatalkan oleh Server Admin")
+
+        try:
+            if action == "shutdown":
+                self.log(f"⚡ Menerima perintah SHUTDOWN dari Server Admin (Jeda: {delay}s)...")
+                # /s = shutdown, /f = force close apps, /t = delay detik, /c = pesan
+                cmd = ["shutdown", "/s", "/f", "/t", str(delay), "/c", reason_msg]
+                subprocess.run(cmd, check=False, creationflags=0x08000000)
+            elif action == "restart":
+                self.log(f"🔄 Menerima perintah RESTART dari Server Admin (Jeda: {delay}s)...")
+                # /r = restart, /f = force close apps, /t = delay detik, /c = pesan
+                cmd = ["shutdown", "/r", "/f", "/t", str(delay), "/c", reason_msg]
+                subprocess.run(cmd, check=False, creationflags=0x08000000)
+            elif action == "cancel":
+                self.log("🛡️ Menerima perintah PEMBATALAN shutdown/restart dari Server Admin...")
+                cmd = ["shutdown", "/a"]
+                subprocess.run(cmd, check=False, creationflags=0x08000000)
+        except Exception as e:
+            self.log(f"❌ Gagal menjalankan perintah daya ({action}): {e}")
 
     def stop(self):
         self.is_running = False

@@ -4,7 +4,7 @@ import uuid
 from typing import Any, Dict, List
 
 # Versi Aplikasi Saat Ini
-APP_VERSION = "1.3.3"
+APP_VERSION = "1.4.0"
 
 # Tipe Pesan Protokol
 TYPE_REGISTER = "REGISTER"                    # Client mendaftar dengan info hostname, IP, dan OS
@@ -15,6 +15,7 @@ TYPE_PING = "PING"                            # Pengecekan koneksi berkala
 TYPE_PONG = "PONG"                            # Respon balasan koneksi
 TYPE_UPDATE_AVAILABLE = "UPDATE_AVAILABLE"    # Server mengabarkan file pembaruan baru siap diunduh
 TYPE_UPDATE_PROGRESS = "UPDATE_PROGRESS"      # Client melaporkan progres pengunduhan/instalasi update
+TYPE_POWER_ACTION = "POWER_ACTION"            # Perintah remote shutdown / restart / cancel PC client
 
 def create_message(msg_type: str, payload: Dict[str, Any] = None) -> str:
     """Membuat format pesan JSON standar."""

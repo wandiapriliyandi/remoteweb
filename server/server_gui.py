@@ -213,7 +213,29 @@ class ServerApp(ctk.CTk):
         )
         self.lbl_client_count.pack(side="left")
 
-        # Tombol Perbarui Semua Client
+        # Tombol Aksi Massal (Shutdown, Restart, Update)
+        self.btn_shutdown_all = ctk.CTkButton(
+            right_top,
+            text="⚡ Matikan Semua",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#dc2626",
+            hover_color="#b91c1c",
+            height=32,
+            command=self._mass_shutdown_action
+        )
+        self.btn_shutdown_all.pack(side="right", padx=(6, 0))
+
+        self.btn_restart_all = ctk.CTkButton(
+            right_top,
+            text="🔄 Restart Semua",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#ea580c",
+            hover_color="#c2410c",
+            height=32,
+            command=self._mass_restart_action
+        )
+        self.btn_restart_all.pack(side="right", padx=(6, 0))
+
         self.btn_update_all = ctk.CTkButton(
             right_top,
             text="🚀 Perbarui Semua Client",
@@ -223,7 +245,7 @@ class ServerApp(ctk.CTk):
             height=32,
             command=self._update_all_clients_action
         )
-        self.btn_update_all.pack(side="right")
+        self.btn_update_all.pack(side="right", padx=(0, 6))
 
         # Daftar Client Scrollable (Live Cards)
         self.scroll_clients = ctk.CTkScrollableFrame(tab_live, label_text="Aktivitas Browser Real-time")
@@ -424,6 +446,68 @@ class ServerApp(ctk.CTk):
             self.engine.update_single_client(client_id, APP_VERSION)
             self._append_log(f"🚀 Mengirim instruksi update v{APP_VERSION} ke {session.hostname}.")
 
+    def _mass_shutdown_action(self):
+        """Mematikan SEMUA PC Client yang terhubung dengan konfirmasi aman."""
+        if not self.engine.clients:
+            messagebox.showinfo("Informasi", "Belum ada PC Client yang terhubung saat ini.")
+            return
+
+        count = len(self.engine.clients)
+        if messagebox.askyesno(
+            "⚠️ Konfirmasi Matikan Semua PC",
+            f"PERINGATAN:\nApakah Anda yakin ingin MEMATIKAN ({count}) PC Client yang sedang terhubung?\n\nKomputer client akan otomatis dimatikan dalam 5 detik.",
+            icon="warning"
+        ):
+            sent = self.engine.broadcast_power_command(action="shutdown", delay=5, message="Komputer dimatikan oleh Server Admin.")
+            self._append_log(f"⚡ Perintah SHUTDOWN massal dikirim ke {sent} PC Client.")
+            messagebox.showinfo("Perintah Terkirim", f"Perintah Shutdown berhasil dikirim ke {sent} PC Client.")
+
+    def _mass_restart_action(self):
+        """Me-restart SEMUA PC Client yang terhubung dengan konfirmasi."""
+        if not self.engine.clients:
+            messagebox.showinfo("Informasi", "Belum ada PC Client yang terhubung saat ini.")
+            return
+
+        count = len(self.engine.clients)
+        if messagebox.askyesno(
+            "🔄 Konfirmasi Restart Semua PC",
+            f"Apakah Anda yakin ingin ME-RESTART ({count}) PC Client yang sedang terhubung?\n\nKomputer client akan otomatis di-restart dalam 5 detik.",
+            icon="question"
+        ):
+            sent = self.engine.broadcast_power_command(action="restart", delay=5, message="Komputer direstart oleh Server Admin.")
+            self._append_log(f"🔄 Perintah RESTART massal dikirim ke {sent} PC Client.")
+            messagebox.showinfo("Perintah Terkirim", f"Perintah Restart berhasil dikirim ke {sent} PC Client.")
+
+    def _single_shutdown_action(self, client_id: str):
+        """Mematikan SATU PC Client tertentu dengan konfirmasi aman."""
+        session = self.engine.clients.get(client_id)
+        if not session:
+            messagebox.showwarning("Peringatan", "PC Client tidak ditemukan atau sudah terputus.")
+            return
+
+        if messagebox.askyesno(
+            "⚠️ Konfirmasi Matikan PC",
+            f"Apakah Anda yakin ingin MEMATIKAN komputer ini?\n\nPC: {session.hostname}\nIP: {session.ip}\n\nKomputer akan dimatikan dalam 5 detik.",
+            icon="warning"
+        ):
+            self.engine.send_power_command(client_id, action="shutdown", delay=5, message="Komputer dimatikan oleh Server Admin.")
+            self._append_log(f"⚡ Perintah SHUTDOWN dikirim ke PC '{session.hostname}' ({session.ip}).")
+
+    def _single_restart_action(self, client_id: str):
+        """Me-restart SATU PC Client tertentu dengan konfirmasi."""
+        session = self.engine.clients.get(client_id)
+        if not session:
+            messagebox.showwarning("Peringatan", "PC Client tidak ditemukan atau sudah terputus.")
+            return
+
+        if messagebox.askyesno(
+            "🔄 Konfirmasi Restart PC",
+            f"Apakah Anda yakin ingin ME-RESTART komputer ini?\n\nPC: {session.hostname}\nIP: {session.ip}\n\nKomputer akan di-restart dalam 5 detik.",
+            icon="question"
+        ):
+            self.engine.send_power_command(client_id, action="restart", delay=5, message="Komputer direstart oleh Server Admin.")
+            self._append_log(f"🔄 Perintah RESTART dikirim ke PC '{session.hostname}' ({session.ip}).")
+
     def _update_client_list_threadsafe(self):
         self.after(0, self._render_clients_ui)
 
@@ -551,27 +635,53 @@ class ServerApp(ctk.CTk):
             btn_bar = ctk.CTkFrame(card, fg_color="transparent")
             btn_bar.pack(fill="x", padx=12, pady=(2, 8))
 
+            # Aksi Browser di sisi kiri
             btn_force_tab = ctk.CTkButton(
                 btn_bar,
                 text="🛑 Tutup Tab",
-                width=120,
+                width=100,
                 height=26,
                 fg_color="#e11d48",
                 hover_color="#be123c",
                 command=lambda c=cid: self.engine.send_force_close_to_client(c, mode="tab")
             )
-            btn_force_tab.pack(side="right", padx=(6, 0))
+            btn_force_tab.pack(side="left", padx=(0, 6))
 
             btn_force_win = ctk.CTkButton(
                 btn_bar,
-                text="❌ Tutup Jendela Browser",
-                width=160,
+                text="❌ Tutup Jendela",
+                width=110,
                 height=26,
                 fg_color="#991b1b",
                 hover_color="#7f1d1d",
                 command=lambda c=cid: self.engine.send_force_close_to_client(c, mode="window")
             )
-            btn_force_win.pack(side="right")
+            btn_force_win.pack(side="left")
+
+            # Aksi Kontrol Daya di sisi kanan
+            btn_single_shut = ctk.CTkButton(
+                btn_bar,
+                text="⚡ Matikan PC",
+                width=105,
+                height=26,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color="#dc2626",
+                hover_color="#b91c1c",
+                command=lambda c=cid: self._single_shutdown_action(c)
+            )
+            btn_single_shut.pack(side="right", padx=(6, 0))
+
+            btn_single_res = ctk.CTkButton(
+                btn_bar,
+                text="🔄 Restart PC",
+                width=105,
+                height=26,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color="#ea580c",
+                hover_color="#c2410c",
+                command=lambda c=cid: self._single_restart_action(c)
+            )
+            btn_single_res.pack(side="right", padx=(6, 0))
 
     def _on_tab_changed(self):
         """Dipanggil ketika pengguna beralih tab."""

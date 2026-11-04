@@ -21,7 +21,8 @@ from shared.protocol import (
     parse_message,
     is_newer_version,
     TYPE_REGISTER,
-    TYPE_URL_ACTIVITY
+    TYPE_URL_ACTIVITY,
+    TYPE_POWER_ACTION
 )
 from server.storage import load_blocked_domains, save_blocked_domains, get_config_file
 from server.history_db import get_db_path, init_db, add_history_entry, get_history
@@ -78,6 +79,25 @@ class TestProtocol(unittest.TestCase):
         bad_msg = "{invalid_json: true"
         parsed = parse_message(bad_msg)
         self.assertEqual(parsed["type"], "UNKNOWN")
+
+    def test_power_action_message(self):
+        msg = create_message(TYPE_POWER_ACTION, {
+            "action": "shutdown",
+            "delay": 5,
+            "message": "Test shutdown"
+        })
+        parsed = parse_message(msg)
+        self.assertEqual(parsed["type"], TYPE_POWER_ACTION)
+        self.assertEqual(parsed["payload"]["action"], "shutdown")
+        self.assertEqual(parsed["payload"]["delay"], 5)
+
+    def test_power_commands_engine(self):
+        from server.server_core import RemoteServerEngine
+        engine = RemoteServerEngine(port=18765)
+        count = engine.broadcast_power_command("restart", delay=5)
+        self.assertEqual(count, 0)
+        res = engine.send_power_command("non_existent_client", "shutdown")
+        self.assertFalse(res)
 
 
 class TestStorageAndDatabase(unittest.TestCase):

@@ -21,6 +21,7 @@ from shared.protocol import (
     TYPE_PONG,
     TYPE_UPDATE_AVAILABLE,
     TYPE_UPDATE_PROGRESS,
+    TYPE_POWER_ACTION,
     create_message,
     parse_message
 )
@@ -316,6 +317,36 @@ class RemoteServerEngine:
             self._send_to_ws(session.websocket, msg)
             action_desc = "TUTUP SELURUH JENDELA" if mode == "window" else "TUTUP TAB"
             self.log(f"Mengirim perintah {action_desc} ke client {session.hostname}.")
+
+    def send_power_command(self, client_id: str, action: str, delay: int = 5, message: str = "") -> bool:
+        """Kirim perintah kontrol daya (shutdown/restart/cancel) ke SATU client tertentu."""
+        session = self.clients.get(client_id)
+        if not session:
+            return False
+        payload = {
+            "action": action,
+            "delay": delay,
+            "message": message or f"Perintah {action.upper()} dari Server Admin."
+        }
+        msg = create_message(TYPE_POWER_ACTION, payload)
+        self._send_to_ws(session.websocket, msg)
+        self.log(f"⚡ Perintah {action.upper()} dikirim ke client '{session.hostname}' ({session.ip}).")
+        return True
+
+    def broadcast_power_command(self, action: str, delay: int = 5, message: str = "") -> int:
+        """Kirim perintah kontrol daya (shutdown/restart/cancel) ke SEMUA client yang online."""
+        if not self.clients:
+            return 0
+        payload = {
+            "action": action,
+            "delay": delay,
+            "message": message or f"Perintah massal {action.upper()} dari Server Admin."
+        }
+        msg = create_message(TYPE_POWER_ACTION, payload)
+        self._broadcast(msg)
+        count = len(self.clients)
+        self.log(f"⚡ Perintah massal {action.upper()} dikirim ke {count} PC Client.")
+        return count
 
     def _broadcast(self, msg: str):
         if not self._loop or not self.is_running:
