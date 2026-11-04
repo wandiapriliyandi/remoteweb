@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Glow Gradient -->
+    <radialGradient id="bgGlow" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#0284c7" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#0284c7" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Shield Primary Gradient -->
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="50%" stop-color="#0369a1"/>
+      <stop offset="100%" stop-color="#075985"/>
+    </linearGradient>
+
+    <!-- Shield Border Gradient -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="40%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+
+    <!-- Inner Core Gradient -->
+    <linearGradient id="coreGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <!-- Cyan Pulse Accent Gradient -->
+    <linearGradient id="cyanAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+
+    <!-- Drop Shadow Filter -->
+    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#0284c7" flood-opacity="0.45"/>
+    </filter>
+
+    <!-- Glow Filter for Radar & Waves -->
+    <filter id="neonGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Ambient Outer Glow -->
+  <circle cx="256" cy="256" r="230" fill="url(#bgGlow)"/>
+
+  <!-- Outer Shield Shadow & Base -->
+  <g filter="url(#dropShadow)">
+    <!-- Perisai Luar (Shield Silhouette) -->
+    <path d="M 256,48 
+             C 350,48 424,96 424,192
+             C 424,324 330,412 256,456
+             C 182,412 88,324 88,192
+             C 88,96 162,48 256,48 Z"
+          fill="url(#shieldGrad)"
+          stroke="url(#borderGrad)"
+          stroke-width="10"
+          stroke-linejoin="round"/>
+
+    <!-- Inner Shield Inset (Dark Cyber Core) -->
+    <path d="M 256,76 
+             C 330,76 392,116 392,196
+             C 392,306 314,382 256,420
+             C 198,382 120,306 120,196
+             C 120,116 182,76 256,76 Z"
+          fill="url(#coreGrad)"
+          stroke="#1e3a5f"
+          stroke-width="3"/>
+  </g>
+
+  <!-- Grid / Globe Latitudes & Longitudes (Network/Web Monitor Concept) -->
+  <g stroke="#0284c7" stroke-width="2" opacity="0.35" fill="none">
+    <!-- Globe Circle Boundary -->
+    <circle cx="256" cy="225" r="105"/>
+    <!-- Latitudes -->
+    <ellipse cx="256" cy="225" rx="105" ry="40"/>
+    <ellipse cx="256" cy="225" rx="105" ry="75"/>
+    <line x1="151" y1="225" x2="361" y2="225"/>
+    <!-- Longitudes -->
+    <ellipse cx="256" cy="225" rx="42" ry="105"/>
+    <line x1="256" y1="120" x2="256" y2="330"/>
+  </g>
+
+  <!-- Dynamic Radar Sweep Arc / Signal Waves -->
+  <g filter="url(#neonGlow)">
+    <!-- Outer Wave -->
+    <path d="M 180,185 A 95,95 0 0,1 332,185" 
+          fill="none" stroke="#38bdf8" stroke-width="4.5" stroke-linecap="round" opacity="0.85"/>
+
+    <!-- Middle Wave -->
+    <path d="M 200,205 A 68,68 0 0,1 312,205" 
+          fill="none" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+
+    <!-- Inner Wave -->
+    <path d="M 222,224 A 40,40 0 0,1 290,224" 
+          fill="none" stroke="#00f2fe" stroke-width="3.5" stroke-linecap="round"/>
+
+    <!-- Radar Pulse Rings -->
+    <circle cx="256" cy="256" r="60" fill="none" stroke="#0ea5e9" stroke-width="2.5" opacity="0.5"/>
+    <circle cx="256" cy="256" r="30" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-dasharray="6,4"/>
+
+    <!-- Central Glowing Core Beacon -->
+    <circle cx="256" cy="256" r="14" fill="url(#cyanAccent)"/>
+    <circle cx="256" cy="256" r="6" fill="#ffffff"/>
+
+    <!-- Modern Checkmark / Guard Accent at Bottom of Core -->
+    <path d="M 226,325 L 246,345 L 290,295" 
+          fill="none" stroke="#38bdf8" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Top Glass Highlight Reflection -->
+  <path d="M 256,58 
+           C 336,58 396,98 406,175 
+           C 340,140 280,150 200,200
+           C 145,234 116,210 106,175
+           C 116,98 176,58 256,58 Z"
+        fill="#ffffff"
+        opacity="0.08"/>
+</svg>
+
