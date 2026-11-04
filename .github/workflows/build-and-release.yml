@@ -33,6 +33,10 @@ jobs:
       - name: Run Automated Tests
         run: python run_tests.py
 
+      - name: Compile Native Updater.exe
+        run: |
+          & "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:winexe /out:assets\Updater.exe "updater_source\Updater.cs"
+
       - name: Build Uninstall.exe
         run: pyinstaller Uninstall.spec
 
@@ -68,5 +72,6 @@ jobs:
             dist/ServerAdmin.exe
             dist/ClientAgent.exe
             dist/Uninstall.exe
+            assets/Updater.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

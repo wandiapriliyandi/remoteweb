@@ -64,46 +64,45 @@ def download_file_with_progress(
                 pass
         return False
 
-def run_detached_updater_batch(new_exe_path: str, target_exe_path: str) -> bool:
-    """Menjalankan instruksi PowerShell terisolasi untuk menimpa ClientAgent.exe lama dan merestart client ke tray tanpa file script baru."""
-    current_pid = os.getpid()
-    target_dir = os.path.dirname(os.path.abspath(target_exe_path))
+def get_updater_exe_path() -> str:
+    """Mendapatkan path ke executable Updater.exe mandiri."""
+    import shutil
+    app_data = os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local"))
+    inst_updater = os.path.join(app_data, "RemotePCWebMonitor", "Updater.exe")
+    if os.path.exists(inst_updater):
+        return inst_updater
 
-    ps_cmd = (
-        f"$ErrorActionPreference = 'SilentlyContinue'; "
-        f"Remove-Item Env:_MEIPASS2 -Force; Remove-Item Env:_MEIPASS -Force; "
-        f"Remove-Item Env:PYTHONHOME -Force; Remove-Item Env:PYTHONPATH -Force; "
-        f"Start-Sleep -Seconds 1; "
-        f"try {{ Wait-Process -Id {current_pid} -Timeout 3 }} catch {{}}; "
-        f"Stop-Process -Id {current_pid} -Force; "
-        f"Stop-Process -Name 'ClientAgent' -Force; "
-        f"Start-Sleep -Seconds 1; "
-        f"$ok = $false; "
-        f"for ($i=0; $i -lt 10; $i++) {{ "
-        f"  try {{ Copy-Item -Path '{new_exe_path}' -Destination '{target_exe_path}' -Force; $ok = $true; break }} "
-        f"  catch {{ Start-Sleep -Seconds 1 }} "
-        f"}}; "
-        f"Remove-Item -Path '{new_exe_path}' -Force; "
-        f"if ($ok) {{ Start-Process -FilePath '{target_exe_path}' -ArgumentList '--minimized' -WorkingDirectory '{target_dir}' }}"
-    )
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        bundle_updater = os.path.join(sys._MEIPASS, "assets", "Updater.exe")
+        if os.path.exists(bundle_updater):
+            try:
+                os.makedirs(os.path.dirname(inst_updater), exist_ok=True)
+                shutil.copy2(bundle_updater, inst_updater)
+                return inst_updater
+            except Exception:
+                return bundle_updater
+
+    local_updater = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "Updater.exe"))
+    if os.path.exists(local_updater):
+        return local_updater
+
+    return inst_updater
+
+def run_detached_updater_batch(new_exe_path: str, target_exe_path: str) -> bool:
+    """Menjalankan Updater.exe mandiri untuk menimpa file lama dan merestart client ke tray secara bersih."""
+    updater_bin = get_updater_exe_path()
+    current_pid = str(os.getpid())
 
     try:
         CREATE_NO_WINDOW = 0x08000000
-        clean_env = os.environ.copy()
-        clean_env.pop("_MEIPASS2", None)
-        clean_env.pop("_MEIPASS", None)
-        clean_env.pop("PYTHONHOME", None)
-        clean_env.pop("PYTHONPATH", None)
-
         subprocess.Popen(
-            ["powershell.exe", "-WindowStyle", "Hidden", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd],
+            [updater_bin, current_pid, new_exe_path, target_exe_path, "--minimized"],
             creationflags=CREATE_NO_WINDOW,
-            close_fds=True,
-            env=clean_env
+            close_fds=True
         )
         return True
     except Exception as e:
-        print(f"[UPDATER] Gagal menjalankan update powershell: {e}")
+        print(f"[UPDATER] Gagal menjalankan Updater.exe: {e}")
         return False
 
 def perform_auto_update(
