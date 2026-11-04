@@ -578,6 +578,22 @@ class ServerApp(ctk.CTk):
                 )
                 upd_badge.pack(side="left", padx=6)
 
+            if getattr(session, "power_status", ""):
+                p_text = session.power_status
+                p_color = "#ef4444" if "shutdown" in p_text.lower() else "#ea580c"
+                p_icon = "⚡" if "shutdown" in p_text.lower() else "🔄"
+                power_badge = ctk.CTkLabel(
+                    top_bar,
+                    text=f"{p_icon} {p_text}",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    fg_color=p_color,
+                    text_color="#ffffff",
+                    corner_radius=4,
+                    padx=6,
+                    pady=2
+                )
+                power_badge.pack(side="left", padx=6)
+
             # Tombol Update Satuan di sisi kanan
             btn_upd_single = ctk.CTkButton(
                 top_bar,

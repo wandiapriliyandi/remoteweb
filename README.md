@@ -63,3 +63,4 @@ python bump_version.py          # Naikkan versi PATCH (bugfix/refactoring)
 python bump_version.py --minor  # Naikkan versi MINOR (fitur baru)
 python bump_version.py --push   # Rilis otomatis ke GitHub Releases
 ```
+

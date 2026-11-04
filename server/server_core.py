@@ -40,6 +40,7 @@ class ClientSession:
         self.ip = ip
         self.version = version
         self.update_status = ""
+        self.power_status = ""
         self.connected_at = time.strftime("%H:%M:%S")
         self.last_seen = time.time()
         self.current_browser = "Tidak aktif"
@@ -329,8 +330,11 @@ class RemoteServerEngine:
             "message": message or f"Perintah {action.upper()} dari Server Admin."
         }
         msg = create_message(TYPE_POWER_ACTION, payload)
+        session.power_status = f"Sedang {action}..."
         self._send_to_ws(session.websocket, msg)
         self.log(f"⚡ Perintah {action.upper()} dikirim ke client '{session.hostname}' ({session.ip}).")
+        if self.on_clients_changed:
+            self.on_clients_changed()
         return True
 
     def broadcast_power_command(self, action: str, delay: int = 5, message: str = "") -> int:
@@ -343,9 +347,13 @@ class RemoteServerEngine:
             "message": message or f"Perintah massal {action.upper()} dari Server Admin."
         }
         msg = create_message(TYPE_POWER_ACTION, payload)
+        for s in self.clients.values():
+            s.power_status = f"Sedang {action}..."
         self._broadcast(msg)
         count = len(self.clients)
         self.log(f"⚡ Perintah massal {action.upper()} dikirim ke {count} PC Client.")
+        if self.on_clients_changed:
+            self.on_clients_changed()
         return count
 
     def _broadcast(self, msg: str):
